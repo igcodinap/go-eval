@@ -219,6 +219,13 @@ func TestFieldCount_NullValuesSkipped(t *testing.T) {
 	}
 }
 
+func TestNewJSONPath_IndexOverflow(t *testing.T) {
+	_, err := NewJSONPath("items[99999999999999999999999].name")
+	if err == nil {
+		t.Fatalf("expected error for oversized index")
+	}
+}
+
 func TestFieldCount_TrailingJSON(t *testing.T) {
 	r, err := FieldCount{MinFields: 1}.Score(context.Background(), nil, Case{
 		Output: `{"a":1} {"b":2}`,

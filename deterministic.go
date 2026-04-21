@@ -101,6 +101,9 @@ func NewJSONPath(path string) (JSONPath, error) {
 	if !jsonPathRegex.MatchString(path) {
 		return JSONPath{}, fmt.Errorf("unsupported JSONPath %q: supported syntax is dot-separated keys with optional [index], e.g. fields.adults or items[0].name", path)
 	}
+	if _, err := parseJSONPathSteps(path); err != nil {
+		return JSONPath{}, err
+	}
 	return JSONPath{path: path}, nil
 }
 

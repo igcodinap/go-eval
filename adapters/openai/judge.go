@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -76,7 +77,7 @@ func (j *Judge) EvaluateRaw(ctx context.Context, prompt string) (eval.RawJudgeRe
 
 	resp, err := j.client.CreateChatCompletion(callCtx, openai.ChatCompletionRequest{
 		Model:       model,
-		Temperature: 0,
+		Temperature: math.SmallestNonzeroFloat32,
 		Messages: []openai.ChatCompletionMessage{
 			{Role: openai.ChatMessageRoleUser, Content: prompt},
 		},
