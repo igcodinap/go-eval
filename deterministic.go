@@ -137,8 +137,7 @@ func (m JSONPath) Score(ctx context.Context, _ Judge, c Case) (Result, error) {
 
 	steps, err := parseJSONPathSteps(m.path)
 	if err != nil {
-		//nolint:nilerr // Invalid path is represented as a failed metric result, not an execution error.
-		return Result{
+		return Result{ //nolint:nilerr // Invalid path is represented as a failed metric result, not an execution error.
 			Score:  0.0,
 			Passed: false,
 			Metric: m.Name(),
