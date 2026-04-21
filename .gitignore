@@ -20,3 +20,4 @@ coverage.txt
 
 # Example build artifacts
 examples/openai_judge/openai_judge
+// pre-push hook test
