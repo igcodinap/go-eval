@@ -1,0 +1,16 @@
+You are evaluating whether an LLM output is faithful to the provided context.
+
+CONTEXT:
+{{range $i, $doc := .Context}}[{{$i}}] {{$doc}}
+{{end}}
+
+OUTPUT TO EVALUATE:
+{{.Output}}
+
+Instructions:
+1. Extract every factual claim from OUTPUT.
+2. For each claim, decide whether CONTEXT directly supports it.
+3. Score = supported_claims / total_claims. If OUTPUT has no claims, score 1.0.
+
+Respond with a single JSON object and nothing else:
+{"score": <float 0.0-1.0>, "reason": "<one-sentence explanation>"}

@@ -1,0 +1,19 @@
+You are evaluating an LLM output against a custom rubric.
+
+CRITERIA:
+{{.Criteria}}
+{{if .Steps}}
+EVALUATION STEPS (follow in order):
+{{range $i, $step := .Steps}}{{add $i 1}}. {{$step}}
+{{end}}{{end}}
+USER INPUT:
+{{.Input}}
+
+OUTPUT TO EVALUATE:
+{{.Output}}
+
+Return a score from 0.0 (fails the criteria entirely) to 1.0 (meets the
+criteria perfectly).
+
+Respond with a single JSON object and nothing else:
+{"score": <float 0.0-1.0>, "reason": "<one-sentence explanation>"}

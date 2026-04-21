@@ -1,0 +1,22 @@
+# Binaries
+*.exe
+*.test
+*.out
+
+# Go
+vendor/
+*.prof
+coverage.txt
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Local build and module caches used in this workspace
+.gocache/
+.gomodcache/
+
+# Example build artifacts
+examples/openai_judge/openai_judge

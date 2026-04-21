@@ -1,0 +1,16 @@
+You are evaluating whether an LLM output actually answers the user's question.
+
+USER INPUT:
+{{.Input}}
+
+OUTPUT TO EVALUATE:
+{{.Output}}
+
+Instructions:
+1. Generate {{.NumQuestions}} alternative questions that OUTPUT would plausibly answer.
+2. Compare each generated question to USER INPUT for semantic overlap.
+3. Score = fraction of generated questions that match USER INPUT's intent.
+   Score 1.0 = perfectly on-topic; 0.0 = answers something else entirely.
+
+Respond with a single JSON object and nothing else:
+{"score": <float 0.0-1.0>, "reason": "<one-sentence explanation>"}

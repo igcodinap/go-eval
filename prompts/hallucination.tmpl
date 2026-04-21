@@ -1,0 +1,18 @@
+You are evaluating whether an LLM output hallucinated - invented facts not
+present in the provided context.
+
+CONTEXT:
+{{range $i, $doc := .Context}}[{{$i}}] {{$doc}}
+{{end}}
+
+OUTPUT TO EVALUATE:
+{{.Output}}
+
+Instructions:
+1. Identify every factual statement in OUTPUT.
+2. Count statements that go beyond or contradict CONTEXT as hallucinations.
+3. Score = 1 - (hallucinated_statements / total_statements). Higher is better.
+   If OUTPUT has no factual statements, score 1.0.
+
+Respond with a single JSON object and nothing else:
+{"score": <float 0.0-1.0>, "reason": "<one-sentence explanation>"}
