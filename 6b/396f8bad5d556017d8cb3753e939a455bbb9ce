@@ -1,0 +1,23 @@
+README.md
+  138a8c94dfa3ef1f 10-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "6b396f8bad5d556017d8cb3753e939a455bbb9ce",
+  "prompts": {
+    "138a8c94dfa3ef1f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019dacc2-a15e-7753-978b-9ed279b37b00",
+        "model": "gpt-5.3-codex"
+      },
+      "human_author": "igcodinap",
+      "messages": [],
+      "total_additions": 6,
+      "total_deletions": 1,
+      "accepted_lines": 5,
+      "overriden_lines": 0
+    }
+  }
+}
