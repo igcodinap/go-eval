@@ -10,6 +10,14 @@ type Judge interface {
 	Evaluate(ctx context.Context, prompt string) (JudgeResponse, error)
 }
 
+// RawJudge is an optional extension for judges that can return raw model text.
+//
+// Metrics that need structured multi-field parsing (for example Compound)
+// can require this interface while standard metrics continue using Judge.
+type RawJudge interface {
+	EvaluateRaw(ctx context.Context, prompt string) (RawJudgeResponse, error)
+}
+
 // JudgeResponse is the parsed output of an LLM-as-judge call.
 //
 // The Judge is responsible for parsing a model response such as
@@ -18,4 +26,10 @@ type JudgeResponse struct {
 	Score  float64
 	Reason string
 	Tokens int
+}
+
+// RawJudgeResponse is the raw model output for an evaluation prompt.
+type RawJudgeResponse struct {
+	Content string
+	Tokens  int
 }

@@ -3,6 +3,7 @@ package eval
 import (
 	"context"
 	"os"
+	"sync"
 	"testing"
 	"time"
 )
@@ -17,6 +18,8 @@ const EnvVar = "GOEVAL"
 type Runner struct {
 	judge   Judge
 	timeout time.Duration
+	sink    ResultSink
+	sinkMu  sync.Mutex
 }
 
 // Option configures a Runner at construction time.
@@ -73,11 +76,26 @@ func (r *Runner) Run(tb testing.TB, m Metric, c Case) Result {
 
 	if !result.Passed {
 		tb.Errorf("%s=%.2f below threshold\nReason: %s", result.Metric, result.Score, result.Reason)
+		r.writeResult(tb, result)
 		return result
 	}
 
 	tb.Logf("%s=%.2f pass (reason: %s)", result.Metric, result.Score, result.Reason)
+	r.writeResult(tb, result)
 	return result
+}
+
+func (r *Runner) writeResult(tb testing.TB, result Result) {
+	if r.sink == nil {
+		return
+	}
+
+	r.sinkMu.Lock()
+	err := r.sink.Write(newRunResult(tb.Name(), result))
+	r.sinkMu.Unlock()
+	if err != nil {
+		tb.Errorf("result sink: %v", err)
+	}
 }
 
 func runnerContext(timeout time.Duration) (context.Context, context.CancelFunc) {

@@ -1,0 +1,23 @@
+You are an impartial quality judge. Score the following output on each criterion.
+
+## Input
+{{.Input}}
+
+## Output
+{{.Output}}
+{{if .Context}}
+
+## Context
+{{range .Context}}- {{.}}
+{{end}}{{end}}
+
+## Scoring Rubric (score each criterion from 0.0 to 1.0)
+{{range .Dimensions}}
+### {{.Name}}
+{{.Rubric}}
+{{end}}
+
+## Output Format
+Respond with ONLY a JSON object (no markdown fences).
+Each key MUST match the criterion name exactly and each value MUST be an object:
+{"criterion_name": {"score": 0.0, "reason": "brief reason"}}
