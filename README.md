@@ -3,9 +3,9 @@
 > LLM evaluation for Go - `go test` native.
 
 `go-eval` brings `deepeval`-style LLM-as-judge metrics to the Go ecosystem.
-Five core metrics (Faithfulness, Hallucination, AnswerRelevancy,
-ContextPrecision, GEval) run inside standard `go test`, with benchmarks,
-`-parallel`, subtests, and CI integration working out of the box.
+Core metrics (Faithfulness, Hallucination, AnswerRelevancy, ContextPrecision,
+GEval, Compound) and deterministic checks run inside standard `go test`, with
+benchmarks, `-parallel`, subtests, and CI integration working out of the box.
 
 ## Why
 
@@ -64,6 +64,11 @@ Unset `GOEVAL` and evals skip. That keeps CI and local runs safe by default.
 | `AnswerRelevancy`  | Output addresses Input                                 | 0.7               |
 | `ContextPrecision` | Retrieved docs are relevant to Input                   | 0.7               |
 | `GEval`            | Custom rubric with Criteria and optional Steps         | 0.7               |
+| `Compound`         | Multiple rubric dimensions in one judge call           | per-dimension     |
+| `Contains`         | Output contains expected substring                      | binary            |
+| `Regex`            | Output matches a regex                                 | binary            |
+| `JSONPath`         | JSON output value at configured path equals expected   | binary            |
+| `FieldCount`       | Minimum non-null top-level JSON field count            | config            |
 
 ## vs `deepeval`
 
@@ -120,7 +125,16 @@ See `examples/openai_judge/` for a reference implementation.
 
 ## Status
 
-v0.1 - core metrics, Runner, and benchmarks. API may change before v1.0.
+v0.2 - Compound, deterministic metrics, OpenAI adapter module, and opt-in
+result sinks are included. API may change before v1.0.
+
+## Roadmap
+
+v0.3 planned scope:
+1. Conversation evaluation model (`ConversationCase`, `ConversationMetric`, `RunConversation`)
+2. YAML loader submodule (core remains stdlib-only)
+3. Compare/regression package for baseline-vs-current result diffs
+4. Additional adapters (`Genkit`, `Ollama`)
 
 ## License
 
