@@ -51,9 +51,9 @@ func (j *Judge) WithTimeout(timeout time.Duration) *Judge {
 	if j == nil {
 		return nil
 	}
-	copy := *j
-	copy.timeout = timeout
-	return &copy
+	cp := *j
+	cp.timeout = timeout
+	return &cp
 }
 
 // EvaluateRaw implements eval.RawJudge.

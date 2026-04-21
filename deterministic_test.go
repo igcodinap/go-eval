@@ -2,6 +2,7 @@ package eval
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -215,5 +216,20 @@ func TestFieldCount_NullValuesSkipped(t *testing.T) {
 	}
 	if r.Score != 0.5 {
 		t.Fatalf("score mismatch: got %.6f", r.Score)
+	}
+}
+
+func TestFieldCount_TrailingJSON(t *testing.T) {
+	r, err := FieldCount{MinFields: 1}.Score(context.Background(), nil, Case{
+		Output: `{"a":1} {"b":2}`,
+	})
+	if err != nil {
+		t.Fatalf("Score: %v", err)
+	}
+	if r.Passed || r.Score != 0 {
+		t.Fatalf("expected failure for trailing JSON, got %+v", r)
+	}
+	if !strings.Contains(r.Reason, "trailing") && !strings.Contains(r.Reason, "not a valid JSON object") {
+		t.Fatalf("reason missing trailing-data context: %q", r.Reason)
 	}
 }

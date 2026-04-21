@@ -69,7 +69,6 @@ func (s *jsonlFileSink) Write(result RunResult) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
 
 	enc := json.NewEncoder(f)
 	writeErr := enc.Encode(result)

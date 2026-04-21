@@ -134,12 +134,13 @@ func (m JSONPath) Score(ctx context.Context, _ Judge, c Case) (Result, error) {
 
 	steps, err := parseJSONPathSteps(m.path)
 	if err != nil {
+		//nolint:nilerr // Invalid path is represented as a failed metric result, not an execution error.
 		return Result{
 			Score:  0.0,
 			Passed: false,
 			Metric: m.Name(),
 			Reason: err.Error(),
-		}, nil //nolint:nilerr // Invalid path is represented as a failed metric result, not an execution error.
+		}, nil
 	}
 
 	payload, err := decodeJSONAny(c.Output)
@@ -219,6 +220,19 @@ func (m FieldCount) Score(ctx context.Context, _ Judge, c Case) (Result, error) 
 			Passed: false,
 			Metric: m.Name(),
 			Reason: "output is not a valid JSON object: null top-level value",
+		}, nil
+	}
+	var extra any
+	if err := dec.Decode(&extra); err != io.EOF {
+		reason := "output is not a valid JSON object: trailing data after top-level value"
+		if err != nil && err != io.EOF {
+			reason = fmt.Sprintf("output is not a valid JSON object: %v", err)
+		}
+		return Result{
+			Score:  0.0,
+			Passed: false,
+			Metric: m.Name(),
+			Reason: reason,
 		}, nil
 	}
 
