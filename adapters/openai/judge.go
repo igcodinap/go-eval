@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 
@@ -19,8 +18,6 @@ const (
 	defaultTimeout = 30 * time.Second
 	defaultModel   = openai.GPT4oMini
 )
-
-var jsonObjectRE = regexp.MustCompile(`(?s)\{.*\}`)
 
 // Judge is an OpenAI-backed go-eval judge adapter.
 //
@@ -49,10 +46,14 @@ func NewJudgeFromEnv(modelName string) (*Judge, error) {
 	return NewJudge(openai.NewClient(key), modelName), nil
 }
 
-// WithTimeout sets the per-call timeout and returns the same instance.
+// WithTimeout returns a copy of the judge with a different per-call timeout.
 func (j *Judge) WithTimeout(timeout time.Duration) *Judge {
-	j.timeout = timeout
-	return j
+	if j == nil {
+		return nil
+	}
+	copy := *j
+	copy.timeout = timeout
+	return &copy
 }
 
 // EvaluateRaw implements eval.RawJudge.
@@ -132,7 +133,7 @@ type judgeJSON struct {
 }
 
 func parseJudgeJSON(s string) (judgeJSON, error) {
-	candidate := extractJSONObjectCandidate(s)
+	candidate := eval.ExtractJSONObjectCandidate(s)
 
 	var out judgeJSON
 	if err := json.Unmarshal([]byte(candidate), &out); err != nil {
@@ -149,43 +150,4 @@ func parseJudgeJSON(s string) (judgeJSON, error) {
 		Reason: strings.TrimSpace(out.Reason),
 	}
 	return outNormalized, nil
-}
-
-func stripMarkdownCodeFence(s string) string {
-	trimmed := strings.TrimSpace(s)
-	if !strings.HasPrefix(trimmed, "```") {
-		return trimmed
-	}
-
-	lines := strings.Split(trimmed, "\n")
-	if len(lines) == 0 {
-		return trimmed
-	}
-	lines = lines[1:]
-	for len(lines) > 0 {
-		last := strings.TrimSpace(lines[len(lines)-1])
-		if last == "" {
-			lines = lines[:len(lines)-1]
-			continue
-		}
-		if strings.HasPrefix(last, "```") {
-			lines = lines[:len(lines)-1]
-		}
-		break
-	}
-
-	return strings.TrimSpace(strings.Join(lines, "\n"))
-}
-
-func extractJSONObjectCandidate(s string) string {
-	clean := stripMarkdownCodeFence(s)
-	if json.Valid([]byte(clean)) {
-		return clean
-	}
-
-	match := jsonObjectRE.FindString(clean)
-	if match != "" {
-		return strings.TrimSpace(match)
-	}
-	return clean
 }

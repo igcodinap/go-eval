@@ -2,23 +2,17 @@ package eval
 
 import (
 	"encoding/json"
-	"regexp"
 	"strings"
 )
 
-var jsonObjectRE = regexp.MustCompile(`(?s)\{.*\}`)
-
-func stripMarkdownCodeFence(s string) string {
+// StripMarkdownCodeFence removes a surrounding markdown code fence when present.
+func StripMarkdownCodeFence(s string) string {
 	trimmed := strings.TrimSpace(s)
 	if !strings.HasPrefix(trimmed, "```") {
 		return trimmed
 	}
 
 	lines := strings.Split(trimmed, "\n")
-	if len(lines) == 0 {
-		return trimmed
-	}
-
 	lines = lines[1:]
 	for len(lines) > 0 {
 		last := strings.TrimSpace(lines[len(lines)-1])
@@ -35,15 +29,32 @@ func stripMarkdownCodeFence(s string) string {
 	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
-func extractJSONObjectCandidate(s string) string {
-	clean := stripMarkdownCodeFence(s)
+// ExtractJSONObjectCandidate returns a best-effort JSON object candidate string.
+//
+// It first strips markdown fences, then:
+//   - returns the full payload if it is already valid JSON
+//   - scans for the first decodable JSON object in mixed prose
+func ExtractJSONObjectCandidate(s string) string {
+	clean := StripMarkdownCodeFence(s)
 	if json.Valid([]byte(clean)) {
 		return clean
 	}
 
-	match := jsonObjectRE.FindString(clean)
-	if match != "" {
-		return strings.TrimSpace(match)
+	for i := 0; i < len(clean); i++ {
+		if clean[i] != '{' {
+			continue
+		}
+
+		dec := json.NewDecoder(strings.NewReader(clean[i:]))
+		var raw json.RawMessage
+		if err := dec.Decode(&raw); err != nil {
+			continue
+		}
+
+		if len(raw) == 0 || raw[0] != '{' {
+			continue
+		}
+		return strings.TrimSpace(string(raw))
 	}
 
 	return clean

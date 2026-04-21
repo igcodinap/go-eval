@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"regexp"
 	"strconv"
 	"strings"
@@ -138,11 +139,11 @@ func (m JSONPath) Score(ctx context.Context, _ Judge, c Case) (Result, error) {
 			Passed: false,
 			Metric: m.Name(),
 			Reason: err.Error(),
-		}, nil
+		}, nil //nolint:nilerr // Invalid path is represented as a failed metric result, not an execution error.
 	}
 
-	var payload any
-	if err := json.Unmarshal([]byte(c.Output), &payload); err != nil {
+	payload, err := decodeJSONAny(c.Output)
+	if err != nil {
 		return Result{
 			Score:  0.0,
 			Passed: false,
@@ -202,12 +203,22 @@ func (m FieldCount) Score(ctx context.Context, _ Judge, c Case) (Result, error) 
 	}
 
 	var payload map[string]any
-	if err := json.Unmarshal([]byte(c.Output), &payload); err != nil {
+	dec := json.NewDecoder(strings.NewReader(c.Output))
+	dec.UseNumber()
+	if err := dec.Decode(&payload); err != nil {
 		return Result{
 			Score:  0.0,
 			Passed: false,
 			Metric: m.Name(),
 			Reason: fmt.Sprintf("output is not valid JSON object: %v", err),
+		}, nil
+	}
+	if payload == nil {
+		return Result{
+			Score:  0.0,
+			Passed: false,
+			Metric: m.Name(),
+			Reason: "output is not a valid JSON object: null top-level value",
 		}, nil
 	}
 
@@ -304,6 +315,8 @@ func stringifyJSONValue(v any) string {
 		return x
 	case bool:
 		return strconv.FormatBool(x)
+	case json.Number:
+		return x.String()
 	case float64:
 		return strconv.FormatFloat(x, 'f', -1, 64)
 	default:
@@ -313,4 +326,23 @@ func stringifyJSONValue(v any) string {
 		}
 		return string(b)
 	}
+}
+
+func decodeJSONAny(s string) (any, error) {
+	dec := json.NewDecoder(strings.NewReader(s))
+	dec.UseNumber()
+
+	var payload any
+	if err := dec.Decode(&payload); err != nil {
+		return nil, err
+	}
+
+	var extra any
+	if err := dec.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return nil, fmt.Errorf("multiple JSON values are not supported")
+		}
+		return nil, err
+	}
+	return payload, nil
 }

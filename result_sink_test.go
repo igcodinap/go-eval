@@ -110,7 +110,9 @@ func TestJSONLFileSink_ConcurrentWrites(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 
 	scanner := bufio.NewScanner(f)
 	lines := 0

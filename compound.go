@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"text/template"
 	"time"
@@ -58,7 +59,9 @@ func (m Compound) Score(ctx context.Context, j Judge, c Case) (Result, error) {
 	totalTokens := 0
 
 	attemptPrompt := prompt
-	for attempt := 0; attempt < 2; attempt++ {
+	const maxAttempts = 2
+	var lastParseErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
 		rawResp, evalErr := rawJudge.EvaluateRaw(ctx, attemptPrompt)
 		totalTokens += rawResp.Tokens
 		if evalErr != nil {
@@ -69,15 +72,16 @@ func (m Compound) Score(ctx context.Context, j Judge, c Case) (Result, error) {
 		if parseErr == nil {
 			return buildCompoundResult(m.Name(), dimensionResults, time.Since(start), totalTokens), nil
 		}
+		lastParseErr = parseErr
 
-		if attempt == 0 {
+		if attempt < maxAttempts-1 {
 			attemptPrompt = prompt + "\n\nJSON only, no prose."
 			continue
 		}
-
-		return Result{Metric: m.Name(), Latency: time.Since(start), Tokens: totalTokens}, fmt.Errorf("compound: parse response: %w", parseErr)
 	}
-
+	if lastParseErr != nil {
+		return Result{Metric: m.Name(), Latency: time.Since(start), Tokens: totalTokens}, fmt.Errorf("compound: parse response: %w", lastParseErr)
+	}
 	return Result{Metric: m.Name(), Latency: time.Since(start), Tokens: totalTokens}, errors.New("compound: exhausted retry budget")
 }
 
@@ -99,7 +103,7 @@ func validateDimensions(input []Dimension) ([]Dimension, error) {
 		}
 		seen[name] = struct{}{}
 
-		if d.Threshold < 0 || d.Threshold > 1 {
+		if math.IsNaN(d.Threshold) || d.Threshold < 0 || d.Threshold > 1 {
 			return nil, fmt.Errorf("dimension %q threshold %.4f is outside [0,1]", name, d.Threshold)
 		}
 		if strings.TrimSpace(d.Rubric) == "" {
@@ -117,7 +121,7 @@ func validateDimensions(input []Dimension) ([]Dimension, error) {
 }
 
 func parseCompoundDimensions(content string, dimensions []Dimension) ([]DimensionResult, error) {
-	candidate := extractJSONObjectCandidate(content)
+	candidate := ExtractJSONObjectCandidate(content)
 
 	var payload map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(candidate), &payload); err != nil {
@@ -136,7 +140,7 @@ func parseCompoundDimensions(content string, dimensions []Dimension) ([]Dimensio
 			Reason string   `json:"reason"`
 		}
 		if err := json.Unmarshal(rawValue, &nested); err != nil {
-			return nil, fmt.Errorf("dimension %q must be an object {\"score\": number, \"reason\": string}; flat format is not supported", dim.Name)
+			return nil, fmt.Errorf("dimension %q parse failed: %w; expected object {\"score\": number, \"reason\": string} (flat format not supported)", dim.Name, err)
 		}
 		if nested.Score == nil {
 			return nil, fmt.Errorf("dimension %q missing score", dim.Name)

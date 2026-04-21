@@ -83,9 +83,8 @@ Unset `GOEVAL` and evals skip. That keeps CI and local runs safe by default.
 | Dataset loaders (YAML/JSON) | yes                 | no (post-v1)                 |
 | HTML / JSON reports         | yes                 | via `go test -json`          |
 
-`go-eval` is intentionally smaller. v0.1 covers the common case:
-scoring individual RAG-style cases with LLM-as-judge metrics in a CI-friendly
-way.
+`go-eval` is intentionally smaller. v0.2 covers the common case:
+scoring RAG-style and deterministic evaluation cases in a CI-friendly way.
 
 ## Benchmarks
 

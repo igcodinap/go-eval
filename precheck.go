@@ -36,7 +36,10 @@ func (m Precheck) Score(ctx context.Context, j Judge, c Case) (Result, error) {
 
 	preResult, err := m.Pre.Score(ctx, j, c)
 	if err != nil {
-		return Result{Metric: m.Main.Name()}, fmt.Errorf("precheck: pre metric %s: %w", m.Pre.Name(), err)
+		if preResult.Metric == "" {
+			preResult.Metric = m.Main.Name()
+		}
+		return preResult, fmt.Errorf("precheck: pre metric %s: %w", m.Pre.Name(), err)
 	}
 
 	if !preResult.Passed {
@@ -51,14 +54,14 @@ func (m Precheck) Score(ctx context.Context, j Judge, c Case) (Result, error) {
 	}
 
 	mainResult, err := m.Main.Score(ctx, j, c)
-	if err != nil {
-		return mainResult, fmt.Errorf("precheck: main metric %s: %w", m.Main.Name(), err)
-	}
-
 	if mainResult.Metric == "" {
 		mainResult.Metric = m.Main.Name()
 	}
 	mainResult.Tokens += preResult.Tokens
 	mainResult.Latency += preResult.Latency
+	if err != nil {
+		return mainResult, fmt.Errorf("precheck: main metric %s: %w", m.Main.Name(), err)
+	}
+
 	return mainResult, nil
 }

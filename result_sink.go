@@ -2,6 +2,7 @@ package eval
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"sync"
@@ -25,6 +26,8 @@ type RunResult struct {
 }
 
 // ResultSink receives per-run serialized results.
+//
+// Implementations should be safe for concurrent use.
 type ResultSink interface {
 	Write(RunResult) error
 }
@@ -69,7 +72,15 @@ func (s *jsonlFileSink) Write(result RunResult) error {
 	defer f.Close()
 
 	enc := json.NewEncoder(f)
-	return enc.Encode(result)
+	writeErr := enc.Encode(result)
+	closeErr := f.Close()
+	if writeErr != nil && closeErr != nil {
+		return errors.Join(writeErr, closeErr)
+	}
+	if writeErr != nil {
+		return writeErr
+	}
+	return closeErr
 }
 
 func newRunResult(tbName string, result Result) RunResult {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 )
 
 type countingMetric struct {
@@ -24,8 +25,15 @@ func (m *countingMetric) Score(ctx context.Context, j Judge, c Case) (Result, er
 
 func TestPrecheck_FailedPrecheckSkipsMain(t *testing.T) {
 	pre := &countingMetric{
-		name:   "Contains",
-		result: Result{Score: 0, Passed: false, Metric: "Contains", Reason: "missing city"},
+		name: "Contains",
+		result: Result{
+			Score:   0,
+			Passed:  false,
+			Metric:  "Contains",
+			Reason:  "missing city",
+			Tokens:  2,
+			Latency: 5 * time.Millisecond,
+		},
 	}
 	main := &countingMetric{
 		name:   "Faithfulness",
@@ -48,16 +56,19 @@ func TestPrecheck_FailedPrecheckSkipsMain(t *testing.T) {
 	if !strings.Contains(r.Reason, "precheck<Contains> failed:") {
 		t.Fatalf("reason missing precheck prefix: %q", r.Reason)
 	}
+	if r.Tokens != 2 || r.Latency != 5*time.Millisecond {
+		t.Fatalf("unexpected metadata aggregation: tokens=%d latency=%s", r.Tokens, r.Latency)
+	}
 }
 
 func TestPrecheck_PassingPrecheckRunsMain(t *testing.T) {
 	pre := &countingMetric{
 		name:   "Contains",
-		result: Result{Score: 1, Passed: true, Metric: "Contains", Tokens: 2},
+		result: Result{Score: 1, Passed: true, Metric: "Contains", Tokens: 2, Latency: 5 * time.Millisecond},
 	}
 	main := &countingMetric{
 		name:   "Faithfulness",
-		result: Result{Score: 0.9, Passed: true, Metric: "Faithfulness", Tokens: 10},
+		result: Result{Score: 0.9, Passed: true, Metric: "Faithfulness", Tokens: 10, Latency: 20 * time.Millisecond},
 	}
 
 	r, err := (Precheck{Pre: pre, Main: main}).Score(context.Background(), nil, Case{})
@@ -72,5 +83,8 @@ func TestPrecheck_PassingPrecheckRunsMain(t *testing.T) {
 	}
 	if r.Tokens != 12 {
 		t.Fatalf("unexpected token aggregation: got %d", r.Tokens)
+	}
+	if r.Latency != 25*time.Millisecond {
+		t.Fatalf("unexpected latency aggregation: got %s", r.Latency)
 	}
 }

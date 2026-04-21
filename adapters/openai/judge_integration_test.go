@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 )
 
 func TestJudgeIntegration_Evaluate(t *testing.T) {
@@ -18,7 +19,10 @@ func TestJudgeIntegration_Evaluate(t *testing.T) {
 		t.Fatalf("NewJudgeFromEnv: %v", err)
 	}
 
-	resp, err := j.Evaluate(context.Background(), `Return ONLY {"score": 1.0, "reason":"ok"}`)
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+
+	resp, err := j.Evaluate(ctx, `Return ONLY {"score": 1.0, "reason":"ok"}`)
 	if err != nil {
 		t.Fatalf("Evaluate: %v", err)
 	}

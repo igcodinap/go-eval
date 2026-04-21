@@ -3,6 +3,7 @@ package eval
 import (
 	"context"
 	"os"
+	"sync"
 	"testing"
 	"time"
 )
@@ -18,6 +19,7 @@ type Runner struct {
 	judge   Judge
 	timeout time.Duration
 	sink    ResultSink
+	sinkMu  sync.Mutex
 }
 
 // Option configures a Runner at construction time.
@@ -88,7 +90,10 @@ func (r *Runner) writeResult(tb testing.TB, result Result) {
 		return
 	}
 
-	if err := r.sink.Write(newRunResult(tb.Name(), result)); err != nil {
+	r.sinkMu.Lock()
+	err := r.sink.Write(newRunResult(tb.Name(), result))
+	r.sinkMu.Unlock()
+	if err != nil {
 		tb.Errorf("result sink: %v", err)
 	}
 }
