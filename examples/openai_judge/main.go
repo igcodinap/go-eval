@@ -6,17 +6,20 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 
 	openai "github.com/sashabaranov/go-openai"
 
 	eval "github.com/igcodinap/go-eval"
+	openaieval "github.com/igcodinap/go-eval/adapters/openai"
 )
 
 func exampleMain() {
-	judge, err := NewOpenAIJudge(openai.GPT4oMini)
-	if err != nil {
-		log.Fatal(err)
+	key := os.Getenv("OPENAI_API_KEY")
+	if key == "" {
+		log.Fatal("OPENAI_API_KEY not set")
 	}
+	judge := openaieval.NewJudge(openai.NewClient(key), openai.GPT4oMini)
 
 	c := eval.Case{
 		Input:   "What is the capital of France?",

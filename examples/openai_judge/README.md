@@ -1,7 +1,6 @@
 # OpenAI Judge Example
 
-Reference implementation of the `go-eval` `Judge` interface backed by the
-OpenAI chat completions API.
+Demonstrates using the `adapters/openai` module with `go-eval`.
 
 ## Usage
 
@@ -10,6 +9,5 @@ export OPENAI_API_KEY=sk-...
 go run -tags=example ./
 ```
 
-This lives in its own module so the OpenAI SDK stays out of the core
-`go-eval` dependency tree. Copy `judge.go` into your own project or adapt it
-for another provider.
+The OpenAI adapter lives under `adapters/openai` as a separate Go module, so
+the core `go-eval` package remains stdlib-only.
