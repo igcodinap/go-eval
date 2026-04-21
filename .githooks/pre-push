@@ -1,0 +1,22 @@
+#!/bin/sh
+#
+# Pre-push hook: runs tests and lint before pushing.
+# If either fails, the push is aborted.
+#
+# Install: cp .githooks/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push
+
+set -e
+
+echo "==> Running go test -race ./..."
+if ! go test -race ./...; then
+  echo "FAIL: tests failed. Push aborted."
+  exit 1
+fi
+
+echo "==> Running golangci-lint run..."
+if ! golangci-lint run --timeout=5m; then
+  echo "FAIL: lint errors found. Push aborted."
+  exit 1
+fi
+
+echo "==> All checks passed."

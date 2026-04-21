@@ -1,0 +1,19 @@
+run:
+  # Default timeout for the entire linter run
+  timeout: 5m
+
+issues:
+  # Show only new issues (not in the base branch)
+  new: true
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - nilerr
+    - gofmt
+    - goimports
