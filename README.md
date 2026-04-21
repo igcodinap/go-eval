@@ -7,8 +7,6 @@ Core metrics (Faithfulness, Hallucination, AnswerRelevancy, ContextPrecision,
 GEval, Compound) and deterministic checks run inside standard `go test`, with
 benchmarks, `-parallel`, subtests, and CI integration working out of the box.
 
-![go-eval banner](docs/assets/go-eval-banner.png)
-
 ## Why
 
 Python has `deepeval`, `ragas`, and `braintrust`. Go had Levenshtein
