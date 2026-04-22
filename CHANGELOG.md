@@ -7,13 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-### Added
-
-- CI workflow (`.github/workflows/ci.yml`) with `go test -race` and `golangci-lint` on PR/push
-- Pre-push hook (`.githooks/pre-push`) enforcing tests + lint before every push
-- `AGENTS.md` with repo-specific agent instructions
-
-## [v0.2.0] - 2026-04-21
+## [v0.2.0] - 2026-04-22
 
 ### Added
 
@@ -23,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ResultSink` for persisting evaluation results to JSONL
 - `Precheck` metric wrapper for conditional evaluation
 - `json_text.go` helpers: `StripMarkdownCodeFence`, `ExtractJSONObjectCandidate`
+- CI workflow (`.github/workflows/ci.yml`) with `go test -race` and `golangci-lint` on PR/push
+- Pre-push hook (`.githooks/pre-push`) enforcing tests + lint before every push
+- `AGENTS.md` with repo-specific agent instructions
 
 ## [v0.1.0] - 2026-04-21
 
