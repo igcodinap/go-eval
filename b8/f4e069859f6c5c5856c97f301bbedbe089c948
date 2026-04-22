@@ -1,0 +1,23 @@
+AGENTS.md
+  f8eec535c7392f77 1-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "b8f4e069859f6c5c5856c97f301bbedbe089c948",
+  "prompts": {
+    "f8eec535c7392f77": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_24de2a260ffet7J4J74cRoyBis",
+        "model": "opencode-go/qwen3.6-plus"
+      },
+      "human_author": "igcodinap",
+      "messages": [],
+      "total_additions": 48,
+      "total_deletions": 0,
+      "accepted_lines": 48,
+      "overriden_lines": 0
+    }
+  }
+}
