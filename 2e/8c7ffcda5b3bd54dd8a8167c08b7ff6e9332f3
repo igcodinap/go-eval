@@ -1,0 +1,23 @@
+trace_test.go
+  f8eec535c7392f77 44,144
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.2",
+  "base_commit_sha": "2e8c7ffcda5b3bd54dd8a8167c08b7ff6e9332f3",
+  "prompts": {
+    "f8eec535c7392f77": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_24de2a260ffet7J4J74cRoyBis",
+        "model": "opencode-go/qwen3.6-plus"
+      },
+      "human_author": "igcodinap",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 0,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    }
+  }
+}
