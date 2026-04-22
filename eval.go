@@ -60,8 +60,10 @@ func (r *Runner) Run(tb testing.TB, m Metric, c Case) Result {
 	ctx, cancel := runnerContext(r.timeout)
 	defer cancel()
 
+	judge := maybeTrace(r.judge, tb)
+
 	start := time.Now()
-	result, err := m.Score(ctx, r.judge, c)
+	result, err := m.Score(ctx, judge, c)
 	if result.Metric == "" {
 		result.Metric = m.Name()
 	}

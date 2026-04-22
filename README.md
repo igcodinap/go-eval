@@ -55,6 +55,18 @@ GOEVAL=1 go test ./...
 
 Unset `GOEVAL` and evals skip. That keeps CI and local runs safe by default.
 
+### Tracing judge I/O
+
+Set `GOEVAL_TRACE=1` alongside `GOEVAL=1` to dump every judge prompt and
+response via `t.Log`. Output respects `-v` and test buffering.
+
+```bash
+GOEVAL=1 GOEVAL_TRACE=1 go test -v -run TestFaithfulness
+```
+
+> **Warning:** traces contain full prompt + response text. May include PII
+> or sensitive eval payloads. Do not enable in shared CI logs.
+
 ## Metrics
 
 | Metric             | Measures                                               | Default threshold |
