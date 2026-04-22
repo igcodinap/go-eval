@@ -39,6 +39,13 @@ Metrics: `Faithfulness`, `Hallucination`, `AnswerRelevancy`, `ContextPrecision`,
 - `.githooks/pre-push` — runs tests + lint before every push. Configured via `core.hooksPath`.
 - `.golangci.yml` — v2 config. Enabled: `errcheck`, `govet`, `ineffassign`, `staticcheck`, `unused`, `nilerr`, `gofmt`, `goimports`.
 
+## Releases / Changelog
+
+- `CHANGELOG.md` at repo root — Keep a Changelog format, semver.
+- Tag releases as `v<major>.<minor>.<patch>` (e.g. `v0.2.0`).
+- Before tagging: update `CHANGELOG.md` with the new version, date, and grouped changes (Added, Changed, Fixed, Removed). Move entries from `## Unreleased` into the new version section.
+- Tag: `git tag -a v0.x.0 -m "v0.x.0"` then `git push origin v0.x.0`.
+
 ## Conventions
 
 - `Judge` implementations must be safe for concurrent use (shared across `t.Parallel`).
