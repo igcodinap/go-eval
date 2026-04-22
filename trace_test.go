@@ -41,6 +41,7 @@ func (m *mockRawJudge) Evaluate(_ context.Context, _ string) (JudgeResponse, err
 }
 
 func TestMaybeTrace_EnvUnset_ReturnsIdentity(t *testing.T) {
+	t.Setenv(TraceEnvVar, "")
 	j := &MockJudge{}
 	tb := &fakeTraceTB{}
 
@@ -140,6 +141,7 @@ func TestMaybeTrace_ErrorPath(t *testing.T) {
 }
 
 func TestMaybeTrace_SetenvMidTest(t *testing.T) {
+	t.Setenv(TraceEnvVar, "")
 	j := &MockJudge{}
 	tb := &fakeTraceTB{}
 
