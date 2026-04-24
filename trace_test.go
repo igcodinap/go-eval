@@ -80,6 +80,16 @@ func TestMaybeTrace_EnvSet_PlainJudge(t *testing.T) {
 	}
 }
 
+func TestMaybeTrace_EnvSet_NilJudgeReturnsNil(t *testing.T) {
+	t.Setenv(TraceEnvVar, "1")
+	tb := &fakeTraceTB{}
+
+	got := maybeTrace(nil, tb)
+	if got != nil {
+		t.Fatalf("expected nil judge to remain nil when tracing is enabled, got %T", got)
+	}
+}
+
 func TestMaybeTrace_EnvSet_RawJudge(t *testing.T) {
 	t.Setenv(TraceEnvVar, "1")
 

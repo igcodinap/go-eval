@@ -51,6 +51,9 @@ func (t *tracingRawJudge) EvaluateRaw(ctx context.Context, prompt string) (RawJu
 }
 
 func maybeTrace(j Judge, tb traceTB) Judge {
+	if j == nil {
+		return nil
+	}
 	if os.Getenv(TraceEnvVar) == "" {
 		return j
 	}
