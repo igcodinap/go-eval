@@ -33,5 +33,6 @@ type Result struct {
 	Latency    time.Duration
 	Tokens     int
 	Dimensions []DimensionResult
+	Metadata   map[string]any
 	_          struct{}
 }

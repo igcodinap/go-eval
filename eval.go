@@ -62,6 +62,9 @@ func (r *Runner) Run(tb testing.TB, m Metric, c Case) Result {
 
 	start := time.Now()
 	result, err := m.Score(ctx, r.judge, c)
+	if result.Metadata == nil {
+		result.Metadata = c.Metadata
+	}
 	if result.Metric == "" {
 		result.Metric = m.Name()
 	}

@@ -5,8 +5,8 @@ package eval
 // Case is a single LLM evaluation input.
 //
 // Metrics read whichever fields they need (Input, Output, Expected, Context)
-// and ignore the rest. Metadata is user-defined: the library never reads it;
-// it travels with the Case for trace IDs, dataset provenance, and similar
+// and ignore the rest. Metadata is user-defined: the library never interprets
+// it; it travels with the Case for trace IDs, dataset provenance, and similar
 // metadata.
 type Case struct {
 	Input    string
