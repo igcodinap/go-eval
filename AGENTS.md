@@ -53,3 +53,9 @@ Metrics: `Faithfulness`, `Hallucination`, `AnswerRelevancy`, `ContextPrecision`,
 - `Result.Metric` and `Result.Latency` are filled by Runner if empty/zero.
 - Low scores call `tb.Errorf` (non-fatal); judge errors call `tb.Fatalf` (fatal).
 - `adapters/` directory contains external integrations (e.g. OpenAI judge).
+
+## Testing env-gated behavior
+
+- Tests that rely on an env var being **unset** must explicitly call `t.Setenv(EnvVar, "")` at the start. Never assume the inherited environment is clean — a developer shell or CI job may have exported the var globally.
+- Tests that rely on an env var being **set** must call `t.Setenv(EnvVar, "1")` at the start (already standard practice).
+- This applies to `GOEVAL`, `GOEVAL_TRACE`, and any future env gates.
