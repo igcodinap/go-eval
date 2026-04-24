@@ -1,0 +1,37 @@
+docs/specs/2026-04-21-go-eval-v0.2-implementation.md
+  02524fc7c0d9f9fe 26,75
+case.go
+  02524fc7c0d9f9fe 8-9
+eval.go
+  02524fc7c0d9f9fe 65-67
+metric.go
+  02524fc7c0d9f9fe 36
+README.md
+  02524fc7c0d9f9fe 109-122
+CHANGELOG.md
+  02524fc7c0d9f9fe 10-13
+result_sink_test.go
+  02524fc7c0d9f9fe 6,33-38,86-91,99-114,160-164,172-174,198-245
+result_sink.go
+  02524fc7c0d9f9fe 26,97
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "a03dd577d2ae487011f00423a814f24ee21d8bf7",
+  "prompts": {
+    "02524fc7c0d9f9fe": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019dc14a-5e28-7170-95c3-ea10c7a8b131",
+        "model": "gpt-5.5"
+      },
+      "human_author": "igcodinap",
+      "messages": [],
+      "total_additions": 116,
+      "total_deletions": 7,
+      "accepted_lines": 116,
+      "overriden_lines": 0
+    }
+  }
+}
