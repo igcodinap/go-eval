@@ -2,7 +2,7 @@
 
 ## What this is
 
-LLM evaluation library for Go. Brings deepeval-style LLM-as-judge metrics into `go test`. Stdlib-only core, zero external platform requirements.
+LLM evaluation library for Go. Brings LLM-as-judge metrics into `go test`. Stdlib-only core, zero external platform requirements.
 
 ## Commands
 

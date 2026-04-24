@@ -2,17 +2,16 @@
 
 > LLM evaluation for Go - `go test` native.
 
-`go-eval` brings `deepeval`-style LLM-as-judge metrics to the Go ecosystem.
+`go-eval` brings LLM-as-judge metrics to the Go ecosystem.
 Core metrics (Faithfulness, Hallucination, AnswerRelevancy, ContextPrecision,
 GEval, Compound) and deterministic checks run inside standard `go test`, with
 benchmarks, `-parallel`, subtests, and CI integration working out of the box.
 
 ## Why
 
-Python has `deepeval`, `ragas`, and `braintrust`. Go had Levenshtein
-distance and blog-post hacks. `go-eval` fills the gap with a stdlib-only
-core, native `testing.T` integration, and zero external platform
-requirements.
+Python has mature LLM evaluation tooling. Go had Levenshtein distance and
+blog-post hacks. `go-eval` fills the gap with a stdlib-only core, native
+`testing.T` integration, and zero external platform requirements.
 
 ## Install
 
@@ -82,9 +81,9 @@ GOEVAL=1 GOEVAL_TRACE=1 go test -v -run TestFaithfulness
 | `JSONPath`         | JSON output value at configured path equals expected   | binary            |
 | `FieldCount`       | Minimum non-null top-level JSON field count            | config            |
 
-## vs `deepeval`
+## vs Python-first eval tools
 
-| Feature                     | `deepeval` (Python) | `go-eval`                    |
+| Feature                     | Python-first tools   | `go-eval`                    |
 |-----------------------------|---------------------|------------------------------|
 | Core metrics (RAG)          | yes                 | yes                          |
 | Custom LLM-as-judge (GEval) | yes                 | yes                          |
