@@ -90,8 +90,8 @@ GOEVAL=1 GOEVAL_TRACE=1 go test -v -run TestFaithfulness
 | Runs inside test framework  | pytest              | `go test` / `go test -bench` |
 | External platform required  | no                  | no                           |
 | Dependencies in core        | pydantic, pytest    | stdlib only                  |
-| Agent / conversation evals  | yes                 | no (post-v1)                 |
-| Dataset loaders (YAML/JSON) | yes                 | no (post-v1)                 |
+| Agent / conversation evals  | yes                 | planned v0.3                 |
+| Dataset loaders (YAML/JSON) | yes                 | planned v0.3                 |
 | HTML / JSON reports         | yes                 | via `go test -json`          |
 
 `go-eval` is intentionally smaller. v0.2 covers the common case:
