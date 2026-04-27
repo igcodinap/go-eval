@@ -1,0 +1,72 @@
+eval_test.go
+  952050a7e413072c 6,21,24-29,128-177
+metric_support.go
+  952050a7e413072c 70-77
+AGENTS.md
+  952050a7e413072c 28,31,57-67
+README.md
+  952050a7e413072c 130-142
+metric_test.go
+  952050a7e413072c 34-41,43,47-62
+CHANGELOG.md
+  952050a7e413072c 13-14
+adapters/openai/judge_test.go
+  952050a7e413072c 3-11,54-139
+compound.go
+  952050a7e413072c 60-61,69-70,72-78,83,93-99,101-107,191,207-215
+judge_mock_test.go
+  952050a7e413072c 11,18
+eval.go
+  952050a7e413072c 19-23,36-44,59-60,70-71
+judge.go
+  952050a7e413072c 26-30,35-38
+judge_test.go
+  952050a7e413072c 16,23
+metric.go
+  952050a7e413072c 29-39
+adapters/openai/judge.go
+  952050a7e413072c 93-96,110-114,129-133
+precheck_test.go
+  952050a7e413072c 30-37,64-66,72,76,92-93
+compound_test.go
+  952050a7e413072c 10-14,31-44,221-222
+result_sink_test.go
+  952050a7e413072c 90-96,121-123,169-176,187-188
+result_sink.go
+  952050a7e413072c 17-28,90-101
+precheck.go
+  952050a7e413072c 47-54,63-64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "5d2ae0b009d2fcef077afb56418c716b06180c3b",
+  "prompts": {
+    "952050a7e413072c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019dd0bb-c03d-7bb0-9a2b-87467593b6d0",
+        "model": "gpt-5.5"
+      },
+      "human_author": "igcodinap",
+      "messages": [],
+      "total_additions": 409,
+      "total_deletions": 113,
+      "accepted_lines": 408,
+      "overriden_lines": 0
+    },
+    "a09aac7192893706": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019dd055-c5bb-7691-8098-643ee12561c8",
+        "model": "gpt-5.5"
+      },
+      "human_author": "igcodinap",
+      "messages": [],
+      "total_additions": 649,
+      "total_deletions": 54,
+      "accepted_lines": 595,
+      "overriden_lines": 0
+    }
+  }
+}
