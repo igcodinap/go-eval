@@ -14,16 +14,18 @@ const ResultsDirEnvVar = "GOEVAL_RESULTS_DIR"
 
 // RunResult is the serialized form of a metric run.
 type RunResult struct {
-	Timestamp  string            `json:"timestamp"`
-	TestName   string            `json:"test_name"`
-	Metric     string            `json:"metric"`
-	Score      float64           `json:"score"`
-	Passed     bool              `json:"passed"`
-	Reason     string            `json:"reason"`
-	Tokens     int               `json:"tokens"`
-	LatencyNS  int64             `json:"latency_ns"`
-	Dimensions []DimensionResult `json:"dimensions,omitempty"`
-	Metadata   map[string]any    `json:"metadata,omitempty"`
+	Timestamp        string            `json:"timestamp"`
+	TestName         string            `json:"test_name"`
+	Metric           string            `json:"metric"`
+	Score            float64           `json:"score"`
+	Passed           bool              `json:"passed"`
+	Reason           string            `json:"reason"`
+	Tokens           int               `json:"tokens"`
+	PromptTokens     int               `json:"prompt_tokens,omitempty"`
+	CompletionTokens int               `json:"completion_tokens,omitempty"`
+	LatencyNS        int64             `json:"latency_ns"`
+	Dimensions       []DimensionResult `json:"dimensions,omitempty"`
+	Metadata         map[string]any    `json:"metadata,omitempty"`
 }
 
 // ResultSink receives per-run serialized results.
@@ -85,15 +87,17 @@ func (s *jsonlFileSink) Write(result RunResult) error {
 
 func newRunResult(tbName string, result Result) RunResult {
 	return RunResult{
-		Timestamp:  time.Now().UTC().Format(time.RFC3339Nano),
-		TestName:   tbName,
-		Metric:     result.Metric,
-		Score:      result.Score,
-		Passed:     result.Passed,
-		Reason:     result.Reason,
-		Tokens:     result.Tokens,
-		LatencyNS:  int64(result.Latency),
-		Dimensions: result.Dimensions,
-		Metadata:   result.Metadata,
+		Timestamp:        time.Now().UTC().Format(time.RFC3339Nano),
+		TestName:         tbName,
+		Metric:           result.Metric,
+		Score:            result.Score,
+		Passed:           result.Passed,
+		Reason:           result.Reason,
+		Tokens:           result.Tokens,
+		PromptTokens:     result.PromptTokens,
+		CompletionTokens: result.CompletionTokens,
+		LatencyNS:        int64(result.Latency),
+		Dimensions:       result.Dimensions,
+		Metadata:         result.Metadata,
 	}
 }

@@ -90,8 +90,10 @@ func (j *Judge) EvaluateRaw(ctx context.Context, prompt string) (eval.RawJudgeRe
 	}
 
 	return eval.RawJudgeResponse{
-		Content: resp.Choices[0].Message.Content,
-		Tokens:  resp.Usage.TotalTokens,
+		Content:          resp.Choices[0].Message.Content,
+		Tokens:           resp.Usage.TotalTokens,
+		PromptTokens:     resp.Usage.PromptTokens,
+		CompletionTokens: resp.Usage.CompletionTokens,
 	}, nil
 }
 
@@ -105,9 +107,11 @@ func (j *Judge) Evaluate(ctx context.Context, prompt string) (eval.JudgeResponse
 	parsed, parseErr := parseJudgeJSON(raw.Content)
 	if parseErr == nil {
 		return eval.JudgeResponse{
-			Score:  *parsed.Score,
-			Reason: parsed.Reason,
-			Tokens: raw.Tokens,
+			Score:            *parsed.Score,
+			Reason:           parsed.Reason,
+			Tokens:           raw.Tokens,
+			PromptTokens:     raw.PromptTokens,
+			CompletionTokens: raw.CompletionTokens,
 		}, nil
 	}
 
@@ -122,9 +126,11 @@ func (j *Judge) Evaluate(ctx context.Context, prompt string) (eval.JudgeResponse
 	}
 
 	return eval.JudgeResponse{
-		Score:  *parsed.Score,
-		Reason: parsed.Reason,
-		Tokens: raw.Tokens + rawRetry.Tokens,
+		Score:            *parsed.Score,
+		Reason:           parsed.Reason,
+		Tokens:           raw.Tokens + rawRetry.Tokens,
+		PromptTokens:     raw.PromptTokens + rawRetry.PromptTokens,
+		CompletionTokens: raw.CompletionTokens + rawRetry.CompletionTokens,
 	}, nil
 }
 

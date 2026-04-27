@@ -127,9 +127,19 @@ r := eval.NewRunner(judge, eval.WithResultSink(eval.DefaultResultSink()))
 
 When `GOEVAL_RESULTS_DIR` is set, `DefaultResultSink` writes
 `results.jsonl` in that directory. Each row includes `timestamp`, `test_name`,
-`metric`, `score`, `passed`, `reason`, `tokens`, `latency_ns`, optional
-`dimensions`, and optional `metadata`. `Runner` copies `Case.Metadata` into
-the run result unless a metric sets `Result.Metadata` explicitly.
+`metric`, `score`, `passed`, `reason`, `tokens`, optional `prompt_tokens` and
+`completion_tokens`, `latency_ns`, optional `dimensions`, and optional
+`metadata`. `Runner` copies `Case.Metadata` into the run result unless a metric
+sets `Result.Metadata` explicitly.
+
+Use `WithCaseFilter` to run a selected slice of cases, for example a
+critical-only CI path:
+
+```go
+r := eval.NewRunner(judge, eval.WithCaseFilter(func(c eval.Case) bool {
+	return c.Metadata["tier"] == "critical"
+}))
+```
 
 ## Writing your own `Judge`
 

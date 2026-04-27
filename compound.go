@@ -57,6 +57,8 @@ func (m Compound) Score(ctx context.Context, j Judge, c Case) (Result, error) {
 
 	start := time.Now()
 	totalTokens := 0
+	totalPromptTokens := 0
+	totalCompletionTokens := 0
 
 	attemptPrompt := prompt
 	const maxAttempts = 2
@@ -64,13 +66,21 @@ func (m Compound) Score(ctx context.Context, j Judge, c Case) (Result, error) {
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		rawResp, evalErr := rawJudge.EvaluateRaw(ctx, attemptPrompt)
 		totalTokens += rawResp.Tokens
+		totalPromptTokens += rawResp.PromptTokens
+		totalCompletionTokens += rawResp.CompletionTokens
 		if evalErr != nil {
-			return Result{Metric: m.Name(), Latency: time.Since(start), Tokens: totalTokens}, fmt.Errorf("compound: judge: %w", evalErr)
+			return Result{
+				Metric:           m.Name(),
+				Latency:          time.Since(start),
+				Tokens:           totalTokens,
+				PromptTokens:     totalPromptTokens,
+				CompletionTokens: totalCompletionTokens,
+			}, fmt.Errorf("compound: judge: %w", evalErr)
 		}
 
 		dimensionResults, parseErr := parseCompoundDimensions(rawResp.Content, dimensions)
 		if parseErr == nil {
-			return buildCompoundResult(m.Name(), dimensionResults, time.Since(start), totalTokens), nil
+			return buildCompoundResult(m.Name(), dimensionResults, time.Since(start), totalTokens, totalPromptTokens, totalCompletionTokens), nil
 		}
 		lastParseErr = parseErr
 
@@ -80,9 +90,21 @@ func (m Compound) Score(ctx context.Context, j Judge, c Case) (Result, error) {
 		}
 	}
 	if lastParseErr != nil {
-		return Result{Metric: m.Name(), Latency: time.Since(start), Tokens: totalTokens}, fmt.Errorf("compound: parse response: %w", lastParseErr)
+		return Result{
+			Metric:           m.Name(),
+			Latency:          time.Since(start),
+			Tokens:           totalTokens,
+			PromptTokens:     totalPromptTokens,
+			CompletionTokens: totalCompletionTokens,
+		}, fmt.Errorf("compound: parse response: %w", lastParseErr)
 	}
-	return Result{Metric: m.Name(), Latency: time.Since(start), Tokens: totalTokens}, errors.New("compound: exhausted retry budget")
+	return Result{
+		Metric:           m.Name(),
+		Latency:          time.Since(start),
+		Tokens:           totalTokens,
+		PromptTokens:     totalPromptTokens,
+		CompletionTokens: totalCompletionTokens,
+	}, errors.New("compound: exhausted retry budget")
 }
 
 func validateDimensions(input []Dimension) ([]Dimension, error) {
@@ -166,7 +188,7 @@ func parseCompoundDimensions(content string, dimensions []Dimension) ([]Dimensio
 	return results, nil
 }
 
-func buildCompoundResult(metric string, dimensions []DimensionResult, latency time.Duration, tokens int) Result {
+func buildCompoundResult(metric string, dimensions []DimensionResult, latency time.Duration, tokens int, promptTokens int, completionTokens int) Result {
 	var sum float64
 	allPassed := true
 	parts := make([]string, 0, len(dimensions))
@@ -182,12 +204,14 @@ func buildCompoundResult(metric string, dimensions []DimensionResult, latency ti
 	}
 
 	return Result{
-		Score:      sum / float64(len(dimensions)),
-		Reason:     strings.Join(parts, " "),
-		Passed:     allPassed,
-		Metric:     metric,
-		Latency:    latency,
-		Tokens:     tokens,
-		Dimensions: dimensions,
+		Score:            sum / float64(len(dimensions)),
+		Reason:           strings.Join(parts, " "),
+		Passed:           allPassed,
+		Metric:           metric,
+		Latency:          latency,
+		Tokens:           tokens,
+		PromptTokens:     promptTokens,
+		CompletionTokens: completionTokens,
+		Dimensions:       dimensions,
 	}
 }

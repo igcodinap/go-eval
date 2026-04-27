@@ -16,10 +16,11 @@ const EnvVar = "GOEVAL"
 // Runner is safe for concurrent use so one instance can be shared across
 // parallel subtests and benchmarks.
 type Runner struct {
-	judge   Judge
-	timeout time.Duration
-	sink    ResultSink
-	sinkMu  sync.Mutex
+	judge      Judge
+	timeout    time.Duration
+	sink       ResultSink
+	caseFilter func(Case) bool
+	sinkMu     sync.Mutex
 }
 
 // Option configures a Runner at construction time.
@@ -29,6 +30,15 @@ type Option func(*Runner)
 func WithTimeout(d time.Duration) Option {
 	return func(r *Runner) {
 		r.timeout = d
+	}
+}
+
+// WithCaseFilter skips cases for which pred returns false.
+//
+// A nil predicate leaves Runner behavior unchanged.
+func WithCaseFilter(pred func(Case) bool) Option {
+	return func(r *Runner) {
+		r.caseFilter = pred
 	}
 }
 
@@ -46,7 +56,8 @@ func NewRunner(j Judge, opts ...Option) *Runner {
 
 // Run executes one metric against one case and asserts via tb.
 //
-// If GOEVAL is unset, the evaluation is skipped. Metric errors are fatal.
+// If GOEVAL is unset or the case filter excludes the case, the evaluation is
+// skipped. Metric errors are fatal.
 // Low scores are test errors but do not stop the test. The resulting Result
 // is returned in all cases so callers can chain their own assertions.
 func (r *Runner) Run(tb testing.TB, m Metric, c Case) Result {
@@ -54,6 +65,10 @@ func (r *Runner) Run(tb testing.TB, m Metric, c Case) Result {
 
 	if os.Getenv(EnvVar) == "" {
 		tb.Skip("eval skipped, set " + EnvVar + "=1 to run")
+		return Result{}
+	}
+	if r.caseFilter != nil && !r.caseFilter(c) {
+		tb.Skip("eval skipped by case filter")
 		return Result{}
 	}
 

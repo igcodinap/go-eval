@@ -87,10 +87,13 @@ func TestDefaultResultSink_WritesJSONL(t *testing.T) {
 		t.Fatalf("expected non-nil sink")
 	}
 	if err := sink.Write(RunResult{
-		TestName: "t",
-		Metric:   "m",
-		Score:    1,
-		Metadata: map[string]any{"suite": "conversation", "user_language": "spanish"},
+		TestName:         "t",
+		Metric:           "m",
+		Score:            1,
+		Tokens:           11,
+		PromptTokens:     4,
+		CompletionTokens: 7,
+		Metadata:         map[string]any{"suite": "conversation", "user_language": "spanish"},
 	}); err != nil {
 		t.Fatalf("Write: %v", err)
 	}
@@ -114,6 +117,9 @@ func TestDefaultResultSink_WritesJSONL(t *testing.T) {
 	}
 	if got.Metadata["suite"] != "conversation" || got.Metadata["user_language"] != "spanish" {
 		t.Fatalf("unexpected metadata: %+v", got.Metadata)
+	}
+	if got.Tokens != 11 || got.PromptTokens != 4 || got.CompletionTokens != 7 {
+		t.Fatalf("unexpected token fields: %+v", got)
 	}
 }
 
@@ -160,11 +166,14 @@ func TestJSONLFileSink_ConcurrentWrites(t *testing.T) {
 
 func TestNewRunResult(t *testing.T) {
 	rr := newRunResult("test/name", Result{
-		Score:    0.5,
-		Passed:   true,
-		Metric:   "MetricX",
-		Reason:   "ok",
-		Metadata: map[string]any{"trace_id": "abc"},
+		Score:            0.5,
+		Passed:           true,
+		Metric:           "MetricX",
+		Reason:           "ok",
+		Tokens:           9,
+		PromptTokens:     3,
+		CompletionTokens: 6,
+		Metadata:         map[string]any{"trace_id": "abc"},
 	})
 	if rr.TestName != "test/name" || rr.Metric != "MetricX" {
 		t.Fatalf("unexpected run result: %+v", rr)
@@ -174,6 +183,9 @@ func TestNewRunResult(t *testing.T) {
 	}
 	if rr.Metadata["trace_id"] != "abc" {
 		t.Fatalf("unexpected metadata: %+v", rr.Metadata)
+	}
+	if rr.Tokens != 9 || rr.PromptTokens != 3 || rr.CompletionTokens != 6 {
+		t.Fatalf("unexpected token fields: %+v", rr)
 	}
 }
 
