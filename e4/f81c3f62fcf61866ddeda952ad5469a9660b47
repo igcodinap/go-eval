@@ -1,0 +1,23 @@
+docs/proposals/0002-agent-skill-and-prereqs.md
+  221c0a6ee1600601 1-453
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "e4f81c3f62fcf61866ddeda952ad5469a9660b47",
+  "prompts": {
+    "221c0a6ee1600601": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019dc188-05b2-7d62-a015-e09d379f3e0a",
+        "model": "gpt-5.5"
+      },
+      "human_author": "igcodinap",
+      "messages": [],
+      "total_additions": 655,
+      "total_deletions": 0,
+      "accepted_lines": 655,
+      "overriden_lines": 0
+    }
+  }
+}
