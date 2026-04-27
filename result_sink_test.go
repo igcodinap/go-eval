@@ -33,6 +33,9 @@ func (s *recordingSink) count() int {
 func (s *recordingSink) last() RunResult {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if len(s.results) == 0 {
+		panic("recordingSink.last called with no results")
+	}
 	return s.results[len(s.results)-1]
 }
 
@@ -217,6 +220,22 @@ func TestRunner_CarriesCaseMetadataToSink(t *testing.T) {
 		written.Metadata["suite"] != "conversation" ||
 		written.Metadata["user_language"] != "spanish" {
 		t.Fatalf("unexpected sink metadata: %+v", written.Metadata)
+	}
+}
+
+func TestRunner_CopiesCaseMetadata(t *testing.T) {
+	t.Setenv(EnvVar, "1")
+
+	caseMetadata := map[string]any{"suite": "case"}
+	r := NewRunner(&MockJudge{})
+	got := r.Run(t, scriptedMetric{
+		name:   "X",
+		result: Result{Score: 0.9, Passed: true, Metric: "X", Reason: "ok"},
+	}, Case{Metadata: caseMetadata})
+
+	got.Metadata["suite"] = "mutated"
+	if caseMetadata["suite"] != "case" {
+		t.Fatalf("expected case metadata not to be mutated, got %+v", caseMetadata)
 	}
 }
 

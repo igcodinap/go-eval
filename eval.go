@@ -60,10 +60,16 @@ func (r *Runner) Run(tb testing.TB, m Metric, c Case) Result {
 	ctx, cancel := runnerContext(r.timeout)
 	defer cancel()
 
+	judge := maybeTrace(r.judge, tb)
+
 	start := time.Now()
-	result, err := m.Score(ctx, r.judge, c)
-	if result.Metadata == nil {
-		result.Metadata = c.Metadata
+	result, err := m.Score(ctx, judge, c)
+	if result.Metadata == nil && len(c.Metadata) > 0 {
+		metadata := make(map[string]any, len(c.Metadata))
+		for k, v := range c.Metadata {
+			metadata[k] = v
+		}
+		result.Metadata = metadata
 	}
 	if result.Metric == "" {
 		result.Metric = m.Name()
