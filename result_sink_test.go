@@ -3,6 +3,7 @@ package eval
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -27,6 +28,15 @@ func (s *recordingSink) count() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return len(s.results)
+}
+
+func (s *recordingSink) last() RunResult {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.results) == 0 {
+		panic("recordingSink.last called with no results")
+	}
+	return s.results[len(s.results)-1]
 }
 
 func TestRunner_WritesToSinkWhenConfigured(t *testing.T) {
@@ -76,13 +86,34 @@ func TestDefaultResultSink_WritesJSONL(t *testing.T) {
 	if sink == nil {
 		t.Fatalf("expected non-nil sink")
 	}
-	if err := sink.Write(RunResult{TestName: "t", Metric: "m", Score: 1}); err != nil {
+	if err := sink.Write(RunResult{
+		TestName: "t",
+		Metric:   "m",
+		Score:    1,
+		Metadata: map[string]any{"suite": "conversation", "user_language": "spanish"},
+	}); err != nil {
 		t.Fatalf("Write: %v", err)
 	}
 
 	p := filepath.Join(dir, "results.jsonl")
 	if _, err := os.Stat(p); err != nil {
 		t.Fatalf("expected sink output file %s: %v", p, err)
+	}
+
+	f, err := os.Open(p)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() {
+		_ = f.Close()
+	}()
+
+	var got RunResult
+	if err := json.NewDecoder(f).Decode(&got); err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	if got.Metadata["suite"] != "conversation" || got.Metadata["user_language"] != "spanish" {
+		t.Fatalf("unexpected metadata: %+v", got.Metadata)
 	}
 }
 
@@ -129,16 +160,20 @@ func TestJSONLFileSink_ConcurrentWrites(t *testing.T) {
 
 func TestNewRunResult(t *testing.T) {
 	rr := newRunResult("test/name", Result{
-		Score:  0.5,
-		Passed: true,
-		Metric: "MetricX",
-		Reason: "ok",
+		Score:    0.5,
+		Passed:   true,
+		Metric:   "MetricX",
+		Reason:   "ok",
+		Metadata: map[string]any{"trace_id": "abc"},
 	})
 	if rr.TestName != "test/name" || rr.Metric != "MetricX" {
 		t.Fatalf("unexpected run result: %+v", rr)
 	}
 	if rr.Timestamp == "" {
 		t.Fatalf("expected timestamp to be populated")
+	}
+	if rr.Metadata["trace_id"] != "abc" {
+		t.Fatalf("unexpected metadata: %+v", rr.Metadata)
 	}
 }
 
@@ -160,6 +195,73 @@ func TestResultSinkWriteDuringMetricFailureDoesNotRun(t *testing.T) {
 
 	if sink.count() != 0 {
 		t.Fatalf("expected no sink writes on metric error")
+	}
+}
+
+func TestRunner_CarriesCaseMetadataToSink(t *testing.T) {
+	t.Setenv(EnvVar, "1")
+
+	sink := &recordingSink{}
+	r := NewRunner(&MockJudge{}, WithResultSink(sink))
+	got := r.Run(t, scriptedMetric{
+		name:   "X",
+		result: Result{Score: 0.9, Passed: true, Metric: "X", Reason: "ok"},
+	}, Case{Metadata: map[string]any{
+		"scenario":      "empty_thread",
+		"suite":         "conversation",
+		"user_language": "spanish",
+	}})
+
+	if got.Metadata["suite"] != "conversation" {
+		t.Fatalf("expected returned result metadata, got %+v", got.Metadata)
+	}
+	written := sink.last()
+	if written.Metadata["scenario"] != "empty_thread" ||
+		written.Metadata["suite"] != "conversation" ||
+		written.Metadata["user_language"] != "spanish" {
+		t.Fatalf("unexpected sink metadata: %+v", written.Metadata)
+	}
+}
+
+func TestRunner_CopiesCaseMetadata(t *testing.T) {
+	t.Setenv(EnvVar, "1")
+
+	caseMetadata := map[string]any{"suite": "case"}
+	r := NewRunner(&MockJudge{})
+	got := r.Run(t, scriptedMetric{
+		name:   "X",
+		result: Result{Score: 0.9, Passed: true, Metric: "X", Reason: "ok"},
+	}, Case{Metadata: caseMetadata})
+
+	got.Metadata["suite"] = "mutated"
+	if caseMetadata["suite"] != "case" {
+		t.Fatalf("expected case metadata not to be mutated, got %+v", caseMetadata)
+	}
+}
+
+func TestRunner_PreservesMetricMetadata(t *testing.T) {
+	t.Setenv(EnvVar, "1")
+
+	sink := &recordingSink{}
+	r := NewRunner(&MockJudge{}, WithResultSink(sink))
+	metricMetadata := map[string]any{"suite": "metric"}
+	got := r.Run(t, scriptedMetric{
+		name: "X",
+		result: Result{
+			Score:    0.9,
+			Passed:   true,
+			Metric:   "X",
+			Reason:   "ok",
+			Metadata: metricMetadata,
+		},
+	}, Case{Metadata: map[string]any{"suite": "case"}})
+
+	if got.Metadata["suite"] != "metric" {
+		t.Fatalf("expected metric metadata to win, got %+v", got.Metadata)
+	}
+	written := sink.last()
+	if written.Metadata["suite"] != "metric" {
+		t.Fatalf("expected metric metadata in sink, got %+v", written.Metadata)
 	}
 }
 

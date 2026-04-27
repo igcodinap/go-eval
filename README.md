@@ -117,6 +117,20 @@ benchstat old.txt new.txt
 
 `eval.Bench` reports `ns/op`, `tokens/op`, `score_mean`, and `score_stddev`.
 
+## Result JSONL
+
+Configure a sink to persist one JSON object per metric run:
+
+```go
+r := eval.NewRunner(judge, eval.WithResultSink(eval.DefaultResultSink()))
+```
+
+When `GOEVAL_RESULTS_DIR` is set, `DefaultResultSink` writes
+`results.jsonl` in that directory. Each row includes `timestamp`, `test_name`,
+`metric`, `score`, `passed`, `reason`, `tokens`, `latency_ns`, optional
+`dimensions`, and optional `metadata`. `Runner` copies `Case.Metadata` into
+the run result unless a metric sets `Result.Metadata` explicitly.
+
 ## Writing your own `Judge`
 
 ```go

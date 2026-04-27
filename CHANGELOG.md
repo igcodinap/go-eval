@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- `RunResult.Metadata` in JSONL result sinks, copied from `Case.Metadata` by default
+
 ## [v0.2.0] - 2026-04-22
 
 ### Added

@@ -23,6 +23,7 @@ type RunResult struct {
 	Tokens     int               `json:"tokens"`
 	LatencyNS  int64             `json:"latency_ns"`
 	Dimensions []DimensionResult `json:"dimensions,omitempty"`
+	Metadata   map[string]any    `json:"metadata,omitempty"`
 }
 
 // ResultSink receives per-run serialized results.
@@ -93,5 +94,6 @@ func newRunResult(tbName string, result Result) RunResult {
 		Tokens:     result.Tokens,
 		LatencyNS:  int64(result.Latency),
 		Dimensions: result.Dimensions,
+		Metadata:   result.Metadata,
 	}
 }
