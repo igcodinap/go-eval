@@ -1,0 +1,50 @@
+docs/proposals/0001-v0.3-evaluation-core.md
+  221c0a6ee1600601 1-228
+trace.go
+  221c0a6ee1600601 1-65
+README.md
+  221c0a6ee1600601 5,12-14,57-68,84,86,93-94
+docs/proposals/README.md
+  221c0a6ee1600601 1-85
+result_sink_test.go
+  221c0a6ee1600601 36-38,226-238
+AGENTS.md
+  221c0a6ee1600601 5,56-61
+trace_test.go
+  221c0a6ee1600601 1-170
+eval.go
+  221c0a6ee1600601 63-64,66-72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "4dd32c46d112b475033cc32a8e9df31126dd394d",
+  "prompts": {
+    "221c0a6ee1600601": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019dc188-05b2-7d62-a015-e09d379f3e0a",
+        "model": "gpt-5.5"
+      },
+      "human_author": "igcodinap",
+      "messages": [],
+      "total_additions": 992,
+      "total_deletions": 54,
+      "accepted_lines": 952,
+      "overriden_lines": 0
+    },
+    "a6f7f3bad0b3c250": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2d66612f-2b85-41cf-b716-ec95b18377ef",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "igcodinap",
+      "messages": [],
+      "total_additions": 437,
+      "total_deletions": 1,
+      "accepted_lines": 436,
+      "overriden_lines": 0
+    }
+  }
+}
