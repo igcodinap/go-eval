@@ -90,28 +90,75 @@ These ship as small, separate changes (or the first commits of the skill PR) so
 the skill can report more precisely without depending on ad hoc conventions in
 each consuming repo.
 
-#### Token split in `JudgeResponse`
+#### Token split in result types
 
 ```go
 type JudgeResponse struct {
-    Score            float64
-    Reason           string
-    Tokens           int // total, kept for compatibility
-    PromptTokens     int
-    CompletionTokens int
+	Score            float64
+	Reason           string
+	Tokens           int // total, kept for compatibility
+	PromptTokens     int
+	CompletionTokens int
 }
 
 type RawJudgeResponse struct {
-    Content          string
-    Tokens           int
-    PromptTokens     int
-    CompletionTokens int
+	Content          string
+	Tokens           int
+	PromptTokens     int
+	CompletionTokens int
+}
+
+type Result struct {
+	Score            float64
+	Reason           string
+	Passed           bool
+	Metric           string
+	Latency          time.Duration
+	Tokens           int
+	PromptTokens     int
+	CompletionTokens int
+	Dimensions       []DimensionResult
+	Metadata         map[string]any
+	_                struct{}
+}
+
+type RunResult struct {
+	Timestamp        string            `json:"timestamp"`
+	TestName         string            `json:"test_name"`
+	Metric           string            `json:"metric"`
+	Score            float64           `json:"score"`
+	Passed           bool              `json:"passed"`
+	Reason           string            `json:"reason"`
+	Tokens           int               `json:"tokens"`
+	PromptTokens     int               `json:"prompt_tokens,omitempty"`
+	CompletionTokens int               `json:"completion_tokens,omitempty"`
+	LatencyNS        int64             `json:"latency_ns"`
+	Dimensions       []DimensionResult `json:"dimensions,omitempty"`
+	Metadata         map[string]any    `json:"metadata,omitempty"`
 }
 ```
 
-`Result` and `RunResult` propagate the same fields. The OpenAI adapter
-populates all three (the OpenAI API returns prompt and completion tokens
-separately).
+The implementation updates every result propagation path:
+
+- `metric_support.go` copies `JudgeResponse.Tokens`, `PromptTokens`, and
+  `CompletionTokens` into `Result`.
+- `compound.go` accumulates split token counts across `RawJudgeResponse`
+  attempts and passes them through `buildCompoundResult`.
+- `precheck.go` adds prompt/completion token counts from `Pre` and `Main`, the
+  same way it already aggregates total `Tokens`.
+- `deterministic.go` keeps all token fields at zero because no judge call is
+  made.
+- `eval.go` preserves metric-provided token fields when filling Runner-owned
+  fields such as `Metric`, `Latency`, and fallback metadata.
+- `result_sink.go` copies the split fields from `Result` to `RunResult`; JSONL
+  rows include `prompt_tokens` and `completion_tokens` when non-zero.
+
+The OpenAI adapter populates `RawJudgeResponse.Tokens`,
+`RawJudgeResponse.PromptTokens`, and `RawJudgeResponse.CompletionTokens` from
+`resp.Usage.TotalTokens`, `resp.Usage.PromptTokens`, and
+`resp.Usage.CompletionTokens`. `Evaluate` then copies those fields into
+`JudgeResponse`, including retry totals when a stricter JSON-only retry is
+needed.
 
 `Tokens` keeps its current meaning. `PromptTokens` and `CompletionTokens`
 default to `0` when the judge does not report them. The report degrades
@@ -156,7 +203,7 @@ these keys. Convention only; the skill prescribes them.
 Canonical location is neutral so any agent can consume it. Per-agent
 directories use symlinks.
 
-```
+```text
 docs/agent-skills/
   authoring-go-eval-suites/
     SKILL.md
