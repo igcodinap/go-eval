@@ -1,7 +1,8 @@
 # RAG App Example
 
 Demonstrates a full `go-eval` suite: a toy retriever and generator pipeline
-evaluated with all five metrics under `go test`.
+evaluated with all five metrics under `go test`. Test cases are loaded from
+`testdata/cases.json` with `eval.LoadNamedCases`.
 
 ## Run
 
