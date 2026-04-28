@@ -1,0 +1,42 @@
+CHANGELOG.md
+  90f19e278e13a363 19
+README.md
+  90f19e278e13a363 30-32
+docs/getting_started_test.go
+  90f19e278e13a363 1-112
+docs/getting-started.md
+  90f19e278e13a363 1-288
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "69aa07c660de9c4a86079d3cef77e427041fb82d",
+  "prompts": {
+    "90f19e278e13a363": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019dd660-b94b-7c41-9cec-9923d1120b62",
+        "model": "gpt-5.5"
+      },
+      "human_author": "igcodinap",
+      "messages": [],
+      "total_additions": 404,
+      "total_deletions": 0,
+      "accepted_lines": 404,
+      "overriden_lines": 0
+    },
+    "9868e55af87c2764": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019dd64a-89fe-7ef3-832d-fa1509a5d9ab",
+        "model": "gpt-5.5"
+      },
+      "human_author": "igcodinap",
+      "messages": [],
+      "total_additions": 329,
+      "total_deletions": 0,
+      "accepted_lines": 329,
+      "overriden_lines": 0
+    }
+  }
+}
