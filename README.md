@@ -27,6 +27,9 @@ go install github.com/igcodinap/go-eval/cmd/goeval@latest
 
 ## Quickstart
 
+For a full walkthrough with copyable evals, an OpenAI-backed judge, JSONL
+results, and benchmarks, see the [Getting Started guide](docs/getting-started.md).
+
 ```go
 package yourpkg_test
 
