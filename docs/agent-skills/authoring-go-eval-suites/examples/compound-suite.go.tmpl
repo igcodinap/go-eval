@@ -1,0 +1,39 @@
+package {{ .PackageName }}_test
+
+import (
+	"testing"
+
+	openai "github.com/sashabaranov/go-openai"
+
+	eval "github.com/igcodinap/go-eval"
+	openaieval "github.com/igcodinap/go-eval/adapters/openai"
+)
+
+func TestSupportAnswerEval(t *testing.T) {
+	judge, err := openaieval.NewJudgeFromEnv(openai.GPT4oMini)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r := eval.NewRunner(judge, eval.WithResultSink(eval.DefaultResultSink()))
+
+	c := eval.Case{
+		Input:    "My invoice total is wrong. Can you fix it?",
+		Output:   callSupportAgent("My invoice total is wrong. Can you fix it?"),
+		Expected: "The answer should acknowledge the billing issue and explain the next step.",
+		Context:  []string{"Billing corrections require account verification before changes."},
+		Metadata: map[string]any{
+			"flow":    "support.billing",
+			"tier":    "critical",
+			"dataset": "handwritten:v1",
+		},
+	}
+
+	r.Run(t, eval.Compound{
+		Dimensions: []eval.Dimension{
+			{Name: "grounded", Criteria: "Claims are supported by the provided context.", Threshold: 0.8},
+			{Name: "actionable", Criteria: "The answer gives a concrete next step.", Threshold: 0.7},
+			{Name: "tone", Criteria: "The answer is calm and professional.", Threshold: 0.7},
+		},
+	}, c)
+}

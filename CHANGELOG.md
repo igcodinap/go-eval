@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `RunResult.Metadata` in JSONL result sinks, copied from `Case.Metadata` by default
 - Split token counts (`PromptTokens`, `CompletionTokens`) on judge responses, results, and JSONL sink rows
 - `WithCaseFilter` runner option for skipping cases by metadata or custom predicates
+- `authoring-go-eval-suites` agent skill and Claude `/eval` command for designing, running, and reviewing eval suites
 
 ## [v0.2.0] - 2026-04-22
 
