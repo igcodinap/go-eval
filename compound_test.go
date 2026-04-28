@@ -7,9 +7,11 @@ import (
 )
 
 type rawSequenceJudge struct {
-	responses []string
-	calls     int
-	prompts   []string
+	responses        []string
+	calls            int
+	prompts          []string
+	promptTokens     []int
+	completionTokens []int
 }
 
 func (j *rawSequenceJudge) Evaluate(ctx context.Context, prompt string) (JudgeResponse, error) {
@@ -26,7 +28,20 @@ func (j *rawSequenceJudge) EvaluateRaw(ctx context.Context, prompt string) (RawJ
 		idx = len(j.responses) - 1
 	}
 	j.calls++
-	return RawJudgeResponse{Content: j.responses[idx], Tokens: 10}, nil
+	promptTokens := 3
+	if idx < len(j.promptTokens) {
+		promptTokens = j.promptTokens[idx]
+	}
+	completionTokens := 7
+	if idx < len(j.completionTokens) {
+		completionTokens = j.completionTokens[idx]
+	}
+	return RawJudgeResponse{
+		Content:          j.responses[idx],
+		Tokens:           promptTokens + completionTokens,
+		PromptTokens:     promptTokens,
+		CompletionTokens: completionTokens,
+	}, nil
 }
 
 func TestCompound_AllPass(t *testing.T) {
@@ -202,6 +217,9 @@ func TestCompound_RetryOnceOnParseFailure(t *testing.T) {
 	}
 	if len(j.prompts) != 2 {
 		t.Fatalf("expected 2 prompts, got %d", len(j.prompts))
+	}
+	if r.Tokens != 20 || r.PromptTokens != 6 || r.CompletionTokens != 14 {
+		t.Fatalf("unexpected token aggregation: %+v", r)
 	}
 }
 

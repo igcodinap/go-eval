@@ -27,12 +27,14 @@ func TestPrecheck_FailedPrecheckSkipsMain(t *testing.T) {
 	pre := &countingMetric{
 		name: "Contains",
 		result: Result{
-			Score:   0,
-			Passed:  false,
-			Metric:  "Contains",
-			Reason:  "missing city",
-			Tokens:  2,
-			Latency: 5 * time.Millisecond,
+			Score:            0,
+			Passed:           false,
+			Metric:           "Contains",
+			Reason:           "missing city",
+			Tokens:           2,
+			PromptTokens:     1,
+			CompletionTokens: 1,
+			Latency:          5 * time.Millisecond,
 		},
 	}
 	main := &countingMetric{
@@ -59,16 +61,19 @@ func TestPrecheck_FailedPrecheckSkipsMain(t *testing.T) {
 	if r.Tokens != 2 || r.Latency != 5*time.Millisecond {
 		t.Fatalf("unexpected metadata aggregation: tokens=%d latency=%s", r.Tokens, r.Latency)
 	}
+	if r.PromptTokens != 1 || r.CompletionTokens != 1 {
+		t.Fatalf("unexpected token split: prompt=%d completion=%d", r.PromptTokens, r.CompletionTokens)
+	}
 }
 
 func TestPrecheck_PassingPrecheckRunsMain(t *testing.T) {
 	pre := &countingMetric{
 		name:   "Contains",
-		result: Result{Score: 1, Passed: true, Metric: "Contains", Tokens: 2, Latency: 5 * time.Millisecond},
+		result: Result{Score: 1, Passed: true, Metric: "Contains", Tokens: 2, PromptTokens: 1, CompletionTokens: 1, Latency: 5 * time.Millisecond},
 	}
 	main := &countingMetric{
 		name:   "Faithfulness",
-		result: Result{Score: 0.9, Passed: true, Metric: "Faithfulness", Tokens: 10, Latency: 20 * time.Millisecond},
+		result: Result{Score: 0.9, Passed: true, Metric: "Faithfulness", Tokens: 10, PromptTokens: 4, CompletionTokens: 6, Latency: 20 * time.Millisecond},
 	}
 
 	r, err := (Precheck{Pre: pre, Main: main}).Score(context.Background(), nil, Case{})
@@ -83,6 +88,9 @@ func TestPrecheck_PassingPrecheckRunsMain(t *testing.T) {
 	}
 	if r.Tokens != 12 {
 		t.Fatalf("unexpected token aggregation: got %d", r.Tokens)
+	}
+	if r.PromptTokens != 5 || r.CompletionTokens != 7 {
+		t.Fatalf("unexpected token split aggregation: prompt=%d completion=%d", r.PromptTokens, r.CompletionTokens)
 	}
 	if r.Latency != 25*time.Millisecond {
 		t.Fatalf("unexpected latency aggregation: got %s", r.Latency)

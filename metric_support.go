@@ -67,11 +67,13 @@ func runPromptMetric(
 	}
 
 	return Result{
-		Score:   resp.Score,
-		Reason:  resp.Reason,
-		Passed:  resp.Score >= threshold,
-		Metric:  metricName,
-		Latency: latency,
-		Tokens:  resp.Tokens,
+		Score:            resp.Score,
+		Reason:           resp.Reason,
+		Passed:           resp.Score >= threshold,
+		Metric:           metricName,
+		Latency:          latency,
+		Tokens:           resp.Tokens,
+		PromptTokens:     resp.PromptTokens,
+		CompletionTokens: resp.CompletionTokens,
 	}, nil
 }

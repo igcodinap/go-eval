@@ -23,13 +23,17 @@ type RawJudge interface {
 // The Judge is responsible for parsing a model response such as
 // `{"score": 0.82, "reason": "..."}` into this struct.
 type JudgeResponse struct {
-	Score  float64
-	Reason string
-	Tokens int
+	Score            float64
+	Reason           string
+	Tokens           int
+	PromptTokens     int
+	CompletionTokens int
 }
 
 // RawJudgeResponse is the raw model output for an evaluation prompt.
 type RawJudgeResponse struct {
-	Content string
-	Tokens  int
+	Content          string
+	Tokens           int
+	PromptTokens     int
+	CompletionTokens int
 }

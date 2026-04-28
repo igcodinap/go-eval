@@ -26,13 +26,15 @@ type DimensionResult struct {
 
 // Result is what a Metric returns after scoring a Case.
 type Result struct {
-	Score      float64
-	Reason     string
-	Passed     bool
-	Metric     string
-	Latency    time.Duration
-	Tokens     int
-	Dimensions []DimensionResult
-	Metadata   map[string]any
-	_          struct{}
+	Score            float64
+	Reason           string
+	Passed           bool
+	Metric           string
+	Latency          time.Duration
+	Tokens           int
+	PromptTokens     int
+	CompletionTokens int
+	Dimensions       []DimensionResult
+	Metadata         map[string]any
+	_                struct{}
 }

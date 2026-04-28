@@ -44,12 +44,14 @@ func (m Precheck) Score(ctx context.Context, j Judge, c Case) (Result, error) {
 
 	if !preResult.Passed {
 		return Result{
-			Score:   0,
-			Passed:  false,
-			Metric:  m.Main.Name(),
-			Reason:  fmt.Sprintf("precheck<%s> failed: %s", m.Pre.Name(), preResult.Reason),
-			Latency: preResult.Latency,
-			Tokens:  preResult.Tokens,
+			Score:            0,
+			Passed:           false,
+			Metric:           m.Main.Name(),
+			Reason:           fmt.Sprintf("precheck<%s> failed: %s", m.Pre.Name(), preResult.Reason),
+			Latency:          preResult.Latency,
+			Tokens:           preResult.Tokens,
+			PromptTokens:     preResult.PromptTokens,
+			CompletionTokens: preResult.CompletionTokens,
 		}, nil
 	}
 
@@ -58,6 +60,8 @@ func (m Precheck) Score(ctx context.Context, j Judge, c Case) (Result, error) {
 		mainResult.Metric = m.Main.Name()
 	}
 	mainResult.Tokens += preResult.Tokens
+	mainResult.PromptTokens += preResult.PromptTokens
+	mainResult.CompletionTokens += preResult.CompletionTokens
 	mainResult.Latency += preResult.Latency
 	if err != nil {
 		return mainResult, fmt.Errorf("precheck: main metric %s: %w", m.Main.Name(), err)

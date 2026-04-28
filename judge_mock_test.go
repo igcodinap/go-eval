@@ -8,14 +8,14 @@ import (
 
 func TestMockJudge_ReturnsConfiguredResponse(t *testing.T) {
 	mj := &MockJudge{
-		Response: JudgeResponse{Score: 0.42, Reason: "canned", Tokens: 7},
+		Response: JudgeResponse{Score: 0.42, Reason: "canned", Tokens: 7, PromptTokens: 3, CompletionTokens: 4},
 	}
 
 	resp, err := mj.Evaluate(context.Background(), "prompt")
 	if err != nil {
 		t.Fatalf("Evaluate: %v", err)
 	}
-	if resp.Score != 0.42 || resp.Reason != "canned" || resp.Tokens != 7 {
+	if resp.Score != 0.42 || resp.Reason != "canned" || resp.Tokens != 7 || resp.PromptTokens != 3 || resp.CompletionTokens != 4 {
 		t.Fatalf("unexpected response: %+v", resp)
 	}
 	if mj.Calls() != 1 {

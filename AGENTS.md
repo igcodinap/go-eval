@@ -25,10 +25,10 @@ Core interfaces in root package:
 
 | Type | Purpose |
 |------|---------|
-| `Judge` | LLM provider abstraction — sends prompt, returns `{score, reason, tokens}`. Must be concurrency-safe. |
+| `Judge` | LLM provider abstraction — sends prompt, returns `{score, reason, tokens, prompt_tokens, completion_tokens}`. Must be concurrency-safe. |
 | `Metric` | Evaluation contract — `Score(ctx, judge, case) → Result`. Stateless value types. |
 | `Case` | Evaluation input — `Input`, `Output`, `Expected`, `Context`, `Metadata`. |
-| `Result` | Score output — `Score`, `Passed`, `Reason`, `Latency`, `Tokens`. |
+| `Result` | Score output — `Score`, `Passed`, `Reason`, `Latency`, `Tokens`, `PromptTokens`, `CompletionTokens`. |
 | `Runner` | Ties Judge + Metric + Case together, asserts via `testing.TB`. Shared across parallel subtests. |
 
 Metrics: `Faithfulness`, `Hallucination`, `AnswerRelevancy`, `ContextPrecision`, `GEval`, `Precheck`, `Compound`, `Deterministic` (JSONPath, FieldCount).
@@ -53,6 +53,18 @@ Metrics: `Faithfulness`, `Hallucination`, `AnswerRelevancy`, `ContextPrecision`,
 - `Result.Metric` and `Result.Latency` are filled by Runner if empty/zero.
 - Low scores call `tb.Errorf` (non-fatal); judge errors call `tb.Fatalf` (fatal).
 - `adapters/` directory contains external integrations (e.g. OpenAI judge).
+
+### Case metadata conventions
+
+`Case.Metadata` is user-defined and copied into JSONL results. The library does
+not interpret these keys, but eval suites and agent reports should use them
+consistently:
+
+| Key | Type | Purpose |
+|-----|------|---------|
+| `flow` | string | Logical agent flow exercised (e.g. `rag.retrieval`, `tool_use.search`) |
+| `tier` | string | Case selection tier: `critical`, `standard`, or `extended` |
+| `dataset` | string | Dataset name and version/provenance |
 
 ## Testing env-gated behavior
 
