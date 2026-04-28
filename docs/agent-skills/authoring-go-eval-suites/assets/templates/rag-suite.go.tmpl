@@ -11,6 +11,10 @@ import (
 )
 
 func TestRAGEval(t *testing.T) {
+	if os.Getenv(eval.EnvVar) == "" {
+		t.Skip("eval skipped, set " + eval.EnvVar + "=1 to run")
+	}
+
 	judge, err := openaieval.NewJudgeFromEnv(openai.GPT4oMini)
 	if err != nil {
 		t.Fatal(err)

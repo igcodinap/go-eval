@@ -10,15 +10,17 @@ Read `$ARGUMENTS`.
 
 - If it starts with `design`, `run`, or `review`, use that mode.
 - Else inspect the target package, or the current package when no target is given.
-- If no `_test.go` imports `github.com/igcodinap/go-eval` and no `_test.go` uses `eval.NewRunner` or `eval.Bench`, mode is `design`.
-- Else if no `results.jsonl` exists under `.eval-results/`, or it is older than eval test files, mode is `run`.
+- Compute matching eval test files: `_test.go` files that import `github.com/igcodinap/go-eval`, call `eval.NewRunner`, or call `eval.Bench`.
+- If there are no matching eval test files, mode is `design`.
+- Else compare `.eval-results/results.jsonl` to the newest matching `_test.go` mtime.
+- If `results.jsonl` is missing under `.eval-results/`, or older than that newest matching `_test.go`, mode is `run`.
 - Else mode is `review`.
 
 ## Modes
 
 ### design
 
-Read `AGENTS.md`, scan agent-facing code for flows, propose a case set and metric selection, and draft an eval suite from the skill checklist and `assets/templates/`. Print the proposed file to stdout. Only write files when `$ARGUMENTS` includes `--write`.
+Read `AGENTS.md`, scan agent-facing code for flows, propose a case set and metric selection, and draft an eval suite from the skill checklist and `docs/agent-skills/authoring-go-eval-suites/assets/templates/`. Print the proposed file to stdout. Only write files when `$ARGUMENTS` includes `--write`.
 
 ### run
 

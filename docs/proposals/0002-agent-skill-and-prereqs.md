@@ -252,10 +252,10 @@ Body sections, in order:
    `Faithfulness`. Multi-dimension single judge call → `Compound`. Binary
    format → `Contains` / `Regex` / `JSONPath` / `FieldCount`. Custom rubric
    → `GEval`. Cheap pre-filter → `Precheck` wrapper.
-6. **Authoring checklist** — seven steps: define case shape, pick metric,
-   set threshold (with justification), wire judge (concurrency-safe), gate
-   on `GOEVAL`, use bundled templates when useful, attach to `_test.go`.
-   References `assets/templates/`.
+6. **Authoring checklist** — define case shape, keep metrics stateless, pick
+   metric, set threshold (with justification), wire judge (concurrency-safe),
+   preserve `GOEVAL` gating, use bundled templates when useful, attach to
+   `_test.go`. References `assets/templates/`.
 7. **Running** — commands table covering plain, with sink, with
    `GOEVAL_TRACE`, with bench, with case filter.
 8. **Reading results** — points at `references/report-template.md` and
@@ -390,16 +390,18 @@ Single command, mode inferred from repo state.
 Invoke the `authoring-go-eval-suites` skill. Detect mode:
 
 - If $ARGUMENTS starts with `design`, `run`, or `review`, use that mode.
-- Else if no `*_eval_test.go` exists in the target package → mode = design.
-- Else if `results.jsonl` does not exist or is older than the test files
-  → mode = run.
+- Else compute matching eval test files: `_test.go` files that import
+  `github.com/igcodinap/go-eval`, call `eval.NewRunner`, or call `eval.Bench`.
+- If there are no matching eval test files → mode = design.
+- Else if `.eval-results/results.jsonl` does not exist or is older than the
+  newest matching `_test.go` → mode = run.
 - Else → mode = review.
 
 Modes:
 
 - design — read AGENTS.md, scan agent code for flows, propose Case set and
   metric selection, draft `_eval_test.go` per the skill's authoring
-  checklist.
+  checklist and `docs/agent-skills/authoring-go-eval-suites/assets/templates/`.
 - run — execute `GOEVAL=1 GOEVAL_RESULTS_DIR=.eval-results/ go test -run
   Eval ./...`, parse `results.jsonl`, fill
   `references/report-template.md`.

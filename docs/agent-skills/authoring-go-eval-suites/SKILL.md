@@ -50,11 +50,13 @@ Read `references/metrics-reference.md` when authoring or diagnosing a specific m
 
 1. Define the flow and attach `Case.Metadata["flow"]`, `["tier"]`, and `["dataset"]`.
 2. Use table-driven subtests with `t.Parallel()` only if the judge is concurrency-safe.
-3. Pick the smallest metric set that catches the failure mode.
-4. Set thresholds with a short reason; do not copy values blindly.
-5. Wire `eval.NewRunner(judge, eval.WithResultSink(eval.DefaultResultSink()))`.
-6. Start from `assets/templates/` when a concrete suite shape is useful.
-7. Keep evals in `_test.go`; rely on `GOEVAL` skip behavior for normal tests.
+3. Keep metrics stateless: value types with read-only config during `Score`.
+4. Pick the smallest metric set that catches the failure mode.
+5. Set thresholds with a short reason; do not copy values blindly.
+6. Wire `eval.NewRunner(judge, eval.WithResultSink(eval.DefaultResultSink()))`; `Runner` fills empty `Result.Metric` and zero `Result.Latency`.
+7. Start from `assets/templates/` when a concrete suite shape is useful.
+8. Keep evals in `_test.go`; preserve `GOEVAL` opt-in behavior for normal suites. If setup creates an external judge before `Runner.Run`, skip early when `os.Getenv(eval.EnvVar) == ""`. If a unit test must force an env gate, use `t.Setenv(...)`.
+9. Use `Runner` assertions when possible; custom wrappers should use `tb.Errorf` for low scores and `tb.Fatalf` for judge/internal errors.
 
 ## Run
 

@@ -2,9 +2,11 @@
 
 Use this file when choosing or diagnosing a `go-eval` metric. Metrics return normalized scores in `[0,1]`; the metric passes when the score is at least its threshold unless noted.
 
+For LLM-judge metrics, "typically needed fields" are not hard-validated by the library. Missing fields usually degrade evaluation quality instead of failing fast.
+
 ## Faithfulness
 
-- Required fields: `Case.Output`, `Case.Context`.
+- Typically needed fields: `Case.Output`, `Case.Context`.
 - Optional fields: `Case.Input` for extra judge context.
 - Score: judge estimate that output claims are supported by context.
 - Default threshold: `0.8`, strict enough for factual RAG answers without demanding perfect wording.
@@ -15,7 +17,7 @@ Use this file when choosing or diagnosing a `go-eval` metric. Metrics return nor
 
 ## Hallucination
 
-- Required fields: `Case.Output`, `Case.Context`.
+- Typically needed fields: `Case.Output`, `Case.Context`.
 - Optional fields: `Case.Input`.
 - Score: judge estimate that output avoids unsupported facts.
 - Default threshold: `0.9`, because invented facts are usually high-severity.
@@ -26,7 +28,7 @@ Use this file when choosing or diagnosing a `go-eval` metric. Metrics return nor
 
 ## AnswerRelevancy
 
-- Required fields: `Case.Input`, `Case.Output`.
+- Typically needed fields: `Case.Input`, `Case.Output`.
 - Optional fields: `Case.Context`.
 - Score: judge estimate that output addresses the input.
 - Default threshold: `0.7`, allowing concise answers that omit nonessential detail.
@@ -37,7 +39,7 @@ Use this file when choosing or diagnosing a `go-eval` metric. Metrics return nor
 
 ## ContextPrecision
 
-- Required fields: `Case.Input`, `Case.Context`.
+- Typically needed fields: `Case.Input`, `Case.Context`.
 - Optional fields: `Case.Output`.
 - Score: judge estimate that retrieved context is relevant to the input.
 - Default threshold: `0.7`, allowing a small amount of noisy retrieval.
@@ -48,7 +50,7 @@ Use this file when choosing or diagnosing a `go-eval` metric. Metrics return nor
 
 ## GEval
 
-- Required fields: whatever the custom `Criteria` and optional `Steps` inspect.
+- Typically needed fields: whatever the custom `Criteria` and optional `Steps` inspect.
 - Optional fields: all `Case` fields may be referenced by the rubric.
 - Score: judge applies the custom rubric.
 - Default threshold: `0.7`.
@@ -59,7 +61,7 @@ Use this file when choosing or diagnosing a `go-eval` metric. Metrics return nor
 
 ## Compound
 
-- Required fields: fields used by each dimension.
+- Typically needed fields: fields used by each dimension.
 - Optional fields: all `Case` fields may be referenced by dimension rubrics.
 - Score: aggregate of dimension scores; each `DimensionResult` has its own pass/fail.
 - Default threshold: per dimension.
