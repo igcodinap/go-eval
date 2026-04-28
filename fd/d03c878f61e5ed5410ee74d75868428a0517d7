@@ -1,0 +1,25 @@
+docs/agent-skills/authoring-go-eval-suites/SKILL.md
+  952050a7e413072c 29,59
+docs/agent-skills/authoring-go-eval-suites/assets/templates/rag-suite.go.tmpl
+  952050a7e413072c 57,60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "fdd03c878f61e5ed5410ee74d75868428a0517d7",
+  "prompts": {
+    "952050a7e413072c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019dd0bb-c03d-7bb0-9a2b-87467593b6d0",
+        "model": "gpt-5.5"
+      },
+      "human_author": "igcodinap",
+      "messages": [],
+      "total_additions": 4,
+      "total_deletions": 5,
+      "accepted_lines": 404,
+      "overriden_lines": 0
+    }
+  }
+}
