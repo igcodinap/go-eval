@@ -1,0 +1,24 @@
+{
+  "cases": [
+    {
+      "name": "france-capital",
+      "input": "What's the capital of France?",
+      "expected": "Paris",
+      "metadata": {
+        "flow": "rag.answer",
+        "tier": "critical",
+        "dataset": "rag_app/smoke-v1"
+      }
+    },
+    {
+      "name": "italy-capital",
+      "input": "What's the capital of Italy?",
+      "expected": "Rome",
+      "metadata": {
+        "flow": "rag.answer",
+        "tier": "standard",
+        "dataset": "rag_app/smoke-v1"
+      }
+    }
+  ]
+}

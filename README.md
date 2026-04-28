@@ -66,6 +66,53 @@ goeval test ./...
 
 Unset `GOEVAL` and evals skip. That keeps CI and local runs safe by default.
 
+## Datasets
+
+Keep golden cases in JSON when you want eval data outside Go test code:
+
+```json
+{
+  "cases": [
+    {
+      "name": "france-capital",
+      "input": "What's the capital of France?",
+      "expected": "Paris",
+      "context": ["Paris is the capital of France."],
+      "metadata": {
+        "flow": "rag.answer",
+        "tier": "critical",
+        "dataset": "capitals/smoke-v1"
+      }
+    }
+  ]
+}
+```
+
+Use `LoadNamedCases` for table-driven tests:
+
+```go
+cases, err := eval.LoadNamedCases("testdata/cases.json")
+if err != nil {
+	t.Fatal(err)
+}
+
+for _, tc := range cases {
+	tc := tc
+	t.Run(tc.Name, func(t *testing.T) {
+		t.Parallel()
+
+		c := tc.Case
+		c.Output, c.Context = runRAG(c.Input)
+
+		r.Run(t, eval.Faithfulness{Threshold: 0.8}, c)
+	})
+}
+```
+
+Use `LoadCases` when names are not needed. The loader is JSON-only and
+stdlib-only; YAML support is deferred to a future subpackage or module so the
+core package stays dependency-free.
+
 ### Tracing judge I/O
 
 Set `GOEVAL_TRACE=1` alongside `GOEVAL=1` to dump every judge prompt and
@@ -103,7 +150,7 @@ GOEVAL=1 GOEVAL_TRACE=1 go test -v -run TestFaithfulness
 | External platform required  | no                  | no                           |
 | Dependencies in core        | pydantic, pytest    | stdlib only                  |
 | Agent / conversation evals  | yes                 | planned v0.3                 |
-| Dataset loaders (YAML/JSON) | yes                 | planned v0.3                 |
+| Dataset loaders             | YAML/JSON           | JSON in core, YAML deferred  |
 | HTML / JSON reports         | yes                 | via `go test -json`          |
 
 `go-eval` is intentionally smaller. v0.2 covers the common case:

@@ -22,21 +22,20 @@ func TestRAGEvalSuite(t *testing.T) {
 
 	r := eval.NewRunner(scriptedJudge{})
 
-	cases := []struct {
-		name string
-		q    string
-	}{
-		{name: "paris", q: "What's the capital of France?"},
-		{name: "rome", q: "What's the capital of Italy?"},
+	cases, err := eval.LoadNamedCases("testdata/cases.json")
+	if err != nil {
+		t.Fatalf("LoadNamedCases: %v", err)
 	}
 
 	for _, tc := range cases {
 		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
+		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
 
-			answer, docs := p.Answer(tc.q)
-			c := eval.Case{Input: tc.q, Output: answer, Context: docs}
+			c := tc.Case
+			answer, docs := p.Answer(c.Input)
+			c.Output = answer
+			c.Context = docs
 
 			r.Run(t, eval.Faithfulness{Threshold: 0.8}, c)
 			r.Run(t, eval.Hallucination{Threshold: 0.9}, c)
