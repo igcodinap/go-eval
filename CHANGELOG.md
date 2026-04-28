@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `compare` package for baseline-vs-current JSONL result regression diffs
 - Minimal `goeval` CLI with `test`, `compare`, and `version` commands
 - JSON dataset loader (`LoadCases`, `LoadNamedCases`, `LoadDataset`) for external golden cases
+- Getting Started guide covering local judges, OpenAI, metrics, JSONL results, and benchmarks
 
 ## [v0.2.0] - 2026-04-22
 
