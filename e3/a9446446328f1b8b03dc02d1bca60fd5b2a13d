@@ -1,0 +1,23 @@
+AGENTS.md
+  1e98b75661f1d725 59-65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "e3a9446446328f1b8b03dc02d1bca60fd5b2a13d",
+  "prompts": {
+    "1e98b75661f1d725": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019dd605-778b-7511-a10c-2ef60ad1d759",
+        "model": "gpt-5.5"
+      },
+      "human_author": "igcodinap",
+      "messages": [],
+      "total_additions": 269,
+      "total_deletions": 0,
+      "accepted_lines": 269,
+      "overriden_lines": 0
+    }
+  }
+}
