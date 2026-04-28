@@ -56,6 +56,13 @@ Metrics: `Faithfulness`, `Hallucination`, `AnswerRelevancy`, `ContextPrecision`,
 - Before tagging: update `CHANGELOG.md` with the new version, date, and grouped changes (Added, Changed, Fixed, Removed). Move entries from `## Unreleased` into the new version section.
 - Tag: `git tag -a v0.x.0 -m "v0.x.0"` then `git push origin v0.x.0`.
 
+## Issue workflow
+
+- When work for a tracked GitHub issue is finished and merged/pushed, update
+  the issue with the commit or PR that completed it, then close the issue.
+- Do not close issues for partial work, local-only commits, or changes that have
+  not landed on the target branch yet.
+
 ## Conventions
 
 - `Judge` implementations must be safe for concurrent use (shared across `t.Parallel`).
