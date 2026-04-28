@@ -1,0 +1,44 @@
+README.md
+  1e98b75661f1d725 22-27,61-66,161-167
+cmd/goeval/main_test.go
+  1e98b75661f1d725 1-193
+CHANGELOG.md
+  1e98b75661f1d725 17
+cmd/goeval/main.go
+  1e98b75661f1d725 1-199
+compare/doc.go
+  1e98b75661f1d725 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "3c504feaae570a65d569e0e65bfe34324af88eb1",
+  "prompts": {
+    "1e98b75661f1d725": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019dd605-778b-7511-a10c-2ef60ad1d759",
+        "model": "gpt-5.5"
+      },
+      "human_author": "igcodinap",
+      "messages": [],
+      "total_additions": 414,
+      "total_deletions": 1,
+      "accepted_lines": 414,
+      "overriden_lines": 0
+    },
+    "606792fc84dd5712": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019dd5e9-0d6a-7c12-9581-8130de1b37c8",
+        "model": "gpt-5.5"
+      },
+      "human_author": "igcodinap",
+      "messages": [],
+      "total_additions": 241,
+      "total_deletions": 0,
+      "accepted_lines": 241,
+      "overriden_lines": 0
+    }
+  }
+}
