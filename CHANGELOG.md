@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `WithCaseFilter` runner option for skipping cases by metadata or custom predicates
 - `authoring-go-eval-suites` agent skill and Claude `/eval` command for designing, running, and reviewing eval suites
 - `compare` package for baseline-vs-current JSONL result regression diffs
+- Minimal `goeval` CLI with `test`, `compare`, and `version` commands
 
 ## [v0.2.0] - 2026-04-22
 

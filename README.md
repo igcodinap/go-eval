@@ -19,6 +19,12 @@ blog-post hacks. `go-eval` fills the gap with a stdlib-only core, native
 go get github.com/igcodinap/go-eval
 ```
 
+Install the optional CLI:
+
+```bash
+go install github.com/igcodinap/go-eval/cmd/goeval@latest
+```
+
 ## Quickstart
 
 ```go
@@ -50,6 +56,12 @@ Run:
 
 ```bash
 GOEVAL=1 go test ./...
+```
+
+Or use the thin CLI wrapper:
+
+```bash
+goeval test ./...
 ```
 
 Unset `GOEVAL` and evals skip. That keeps CI and local runs safe by default.
@@ -145,6 +157,14 @@ Rows are matched by `test_name` and `metric` by default. Use
 `compare.Options.Identity` when a separate case id is stored in metadata.
 Reports include added, missing, improved, regressed, and unchanged entries, with
 score, pass/fail, token, latency, and Compound dimension deltas.
+
+The CLI exposes the same comparison path for CI:
+
+```bash
+goeval compare old/results.jsonl new/results.jsonl
+```
+
+`goeval compare` exits nonzero when rows regress or disappear.
 
 Use `WithCaseFilter` to run a selected slice of cases, for example a
 critical-only CI path:
