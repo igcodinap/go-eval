@@ -1,0 +1,39 @@
+docs/agent-skills/authoring-go-eval-suites/recommendations.md
+  952050a7e413072c 1-52
+.claude/commands/eval.md
+  952050a7e413072c 1-41
+docs/agent-skills/authoring-go-eval-suites/report-template.md
+  952050a7e413072c 1-61
+docs/agent-skills/authoring-go-eval-suites/examples/compound-suite.go.tmpl
+  952050a7e413072c 1-39
+docs/agent-skills/authoring-go-eval-suites/examples/rag-suite.go.tmpl
+  952050a7e413072c 1-67
+docs/agent-skills/authoring-go-eval-suites/metrics-reference.md
+  952050a7e413072c 1-115
+README.md
+  952050a7e413072c 144-153
+CHANGELOG.md
+  952050a7e413072c 15
+docs/agent-skills/authoring-go-eval-suites/SKILL.md
+  952050a7e413072c 1-79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "234bcf7342d5bbe772025415eff1e8ab943b0350",
+  "prompts": {
+    "952050a7e413072c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019dd0bb-c03d-7bb0-9a2b-87467593b6d0",
+        "model": "gpt-5.5"
+      },
+      "human_author": "igcodinap",
+      "messages": [],
+      "total_additions": 752,
+      "total_deletions": 0,
+      "accepted_lines": 752,
+      "overriden_lines": 0
+    }
+  }
+}
