@@ -1,0 +1,25 @@
+dataset_test.go
+  9868e55af87c2764 166-177,179-189
+dataset.go
+  9868e55af87c2764 10,206
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "543a8fd136f6e1105786d5c7bdc22d104ee8087d",
+  "prompts": {
+    "9868e55af87c2764": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019dd64a-89fe-7ef3-832d-fa1509a5d9ab",
+        "model": "gpt-5.5"
+      },
+      "human_author": "igcodinap",
+      "messages": [],
+      "total_additions": 25,
+      "total_deletions": 6,
+      "accepted_lines": 25,
+      "overriden_lines": 0
+    }
+  }
+}
