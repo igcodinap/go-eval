@@ -26,7 +26,7 @@ Do not use it to implement the agent flow itself, benchmark non-AI code, or chan
 | Type | Purpose |
 |---|---|
 | `Case` | Input, output, expected value, context, and metadata for one scenario |
-| `Metric` | Stateless scorer: `Score(ctx, judge, case) -> Result` |
+| `Metric` | Stateless scorer: `Score(ctx, judge, case) -> (Result, error)` |
 | `Judge` | Concurrency-safe LLM provider returning score, reason, and token counts |
 | `Runner` | Applies `GOEVAL`, case filters, sinks, and `testing.TB` assertions |
 | `Result` | Score, pass/fail, reason, dimensions, latency, tokens, metadata |
@@ -56,7 +56,7 @@ Read `references/metrics-reference.md` when authoring or diagnosing a specific m
 6. Wire `eval.NewRunner(judge, eval.WithResultSink(eval.DefaultResultSink()))`; `Runner` fills empty `Result.Metric` and zero `Result.Latency`.
 7. Start from `assets/templates/` when a concrete suite shape is useful.
 8. Keep evals in `_test.go`; preserve `GOEVAL` opt-in behavior for normal suites. If setup creates an external judge before `Runner.Run`, skip early when `os.Getenv(eval.EnvVar) == ""`. If a unit test must force an env gate, use `t.Setenv(...)`.
-9. Use `Runner` assertions when possible; custom wrappers should use `tb.Errorf` for low scores and `tb.Fatalf` for judge/internal errors.
+9. Use `Runner` assertions when possible; custom wrappers should use `tb.Errorf` for low scores and `tb.Fatalf` for judge or internal errors.
 
 ## Run
 

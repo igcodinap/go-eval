@@ -34,14 +34,12 @@ func TestRAGEval(t *testing.T) {
 	cases := []struct {
 		name     string
 		input    string
-		output   string
 		context  []string
 		metadata map[string]any
 	}{
 		{
 			name:    "answers_from_retrieved_context",
 			input:   "What is the refund window?",
-			output:  callRAGSystem("What is the refund window?"),
 			context: []string{"Refunds are accepted within 30 days of purchase."},
 			metadata: map[string]any{
 				"flow":    "rag.answer",
@@ -56,9 +54,10 @@ func TestRAGEval(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
+			output := callRAGSystem(tc.input)
 			c := eval.Case{
 				Input:    tc.input,
-				Output:   tc.output,
+				Output:   output,
 				Context:  tc.context,
 				Metadata: tc.metadata,
 			}
