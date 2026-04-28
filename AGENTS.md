@@ -19,6 +19,16 @@ GOEVAL=1 go test ./...
 GOEVAL=1 go test -bench=. -count=5 > old.txt
 ```
 
+## Task-specific agent skills
+
+For authoring, running, or reviewing `go-eval` suites, use the canonical
+agent-agnostic skill at
+`docs/agent-skills/authoring-go-eval-suites/SKILL.md`.
+
+Agent-specific entrypoints such as `.claude/commands/eval.md` should remain
+thin adapters that point to the canonical skill instead of duplicating its full
+workflow.
+
 ## Architecture
 
 Core interfaces in root package:

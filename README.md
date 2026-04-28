@@ -141,6 +141,17 @@ r := eval.NewRunner(judge, eval.WithCaseFilter(func(c eval.Case) bool {
 }))
 ```
 
+## Agent skill
+
+The repo ships an agentskills.io-style guide for coding agents that need to
+author, run, or review `go-eval` suites. The canonical, agent-agnostic source
+lives at [`docs/agent-skills/authoring-go-eval-suites/`](docs/agent-skills/authoring-go-eval-suites/).
+
+Claude Code users can invoke the companion `/eval` command from
+`.claude/commands/eval.md`. The command is a thin adapter that infers design,
+run, or review mode from repo state and uses the skill's report template and
+recommendation heuristics.
+
 ## Writing your own `Judge`
 
 ```go
