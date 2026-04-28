@@ -163,12 +163,30 @@ func TestDecodeDataset_InvalidFilesReturnClearErrors(t *testing.T) {
 }
 
 func TestDecodeNamedCases_RequiresNames(t *testing.T) {
-	_, err := DecodeNamedCases(strings.NewReader(`{"cases":[{"input":"What is the capital of France?"}]}`))
-	if err == nil {
-		t.Fatalf("expected missing name error")
+	tests := []struct {
+		name    string
+		payload string
+	}{
+		{
+			name:    "missing",
+			payload: `{"cases":[{"input":"What is the capital of France?"}]}`,
+		},
+		{
+			name:    "whitespace",
+			payload: `{"cases":[{"name":"   ","input":"What is the capital of France?"}]}`,
+		},
 	}
-	if !strings.Contains(err.Error(), "case 1: name is required") {
-		t.Fatalf("unexpected error: %v", err)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := DecodeNamedCases(strings.NewReader(tt.payload))
+			if err == nil {
+				t.Fatalf("expected missing name error")
+			}
+			if !strings.Contains(err.Error(), "case 1: name is required") {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
 	}
 }
 

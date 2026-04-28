@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 )
 
 // Dataset is the JSON file format for external eval cases.
@@ -202,7 +203,7 @@ func DecodeNamedCases(r io.Reader) ([]NamedCase, error) {
 
 func validateNamedCases(cases []NamedCase) error {
 	for i, c := range cases {
-		if c.Name == "" {
+		if strings.TrimSpace(c.Name) == "" {
 			return fmt.Errorf("case %d: name is required", i+1)
 		}
 	}
