@@ -101,6 +101,8 @@ func TestGettingStartedDeterministicMetrics(t *testing.T) {
 }
 
 func BenchmarkGettingStartedFaithfulness(b *testing.B) {
+	b.Setenv(eval.EnvVar, "1")
+
 	r := eval.NewRunner(deterministicJudge{})
 	c := eval.Case{
 		Input:   "What is the capital of France?",
