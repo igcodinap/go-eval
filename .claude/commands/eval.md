@@ -1,6 +1,8 @@
 # /eval
 
-Invoke the `authoring-go-eval-suites` skill.
+Invoke the project `authoring-go-eval-suites` skill. The canonical,
+agent-agnostic source is `docs/agent-skills/authoring-go-eval-suites/`; keep
+this command as a thin Claude adapter.
 
 ## Mode Detection
 
@@ -16,7 +18,7 @@ Read `$ARGUMENTS`.
 
 ### design
 
-Read `AGENTS.md`, scan agent-facing code for flows, propose a case set and metric selection, and draft an eval suite from the skill checklist. Print the proposed file to stdout. Only write files when `$ARGUMENTS` includes `--write`.
+Read `AGENTS.md`, scan agent-facing code for flows, propose a case set and metric selection, and draft an eval suite from the skill checklist and `assets/templates/`. Print the proposed file to stdout. Only write files when `$ARGUMENTS` includes `--write`.
 
 ### run
 
@@ -26,7 +28,7 @@ Run:
 GOEVAL=1 GOEVAL_RESULTS_DIR=.eval-results go test -run Eval ./...
 ```
 
-If the repository uses a different eval test pattern, adapt `-run` to the discovered tests. Parse `.eval-results/results.jsonl`, then fill `docs/agent-skills/authoring-go-eval-suites/report-template.md`.
+If the repository uses a different eval test pattern, adapt `-run` to the discovered tests. Parse `.eval-results/results.jsonl`, then fill `docs/agent-skills/authoring-go-eval-suites/references/report-template.md`.
 
 If no `results.jsonl` is produced, fill only the sections supported by `go test`
 output, mark Budget and Regression unavailable, and recommend adding
@@ -34,7 +36,7 @@ output, mark Budget and Regression unavailable, and recommend adding
 
 ### review
 
-Read `.eval-results/results.jsonl` and prior reports if present. Fill the report template and apply `docs/agent-skills/authoring-go-eval-suites/recommendations.md`.
+Read `.eval-results/results.jsonl` and prior reports if present. Fill the report template and apply `docs/agent-skills/authoring-go-eval-suites/references/recommendations.md`.
 
 ## Output
 

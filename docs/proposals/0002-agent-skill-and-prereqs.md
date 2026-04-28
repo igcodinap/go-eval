@@ -207,12 +207,14 @@ directories use symlinks.
 docs/agent-skills/
   authoring-go-eval-suites/
     SKILL.md
-    metrics-reference.md
-    report-template.md
-    recommendations.md
-    examples/
-      rag-suite.go.tmpl
-      compound-suite.go.tmpl
+    references/
+      metrics-reference.md
+      report-template.md
+      recommendations.md
+    assets/
+      templates/
+        rag-suite.go.tmpl
+        compound-suite.go.tmpl
 .claude/
   skills/
     authoring-go-eval-suites/  ->  ../../docs/agent-skills/authoring-go-eval-suites/
@@ -250,13 +252,14 @@ Body sections, in order:
    `Faithfulness`. Multi-dimension single judge call → `Compound`. Binary
    format → `Contains` / `Regex` / `JSONPath` / `FieldCount`. Custom rubric
    → `GEval`. Cheap pre-filter → `Precheck` wrapper.
-6. **Authoring checklist** — six steps: define case shape, pick metric,
+6. **Authoring checklist** — seven steps: define case shape, pick metric,
    set threshold (with justification), wire judge (concurrency-safe), gate
-   on `GOEVAL`, attach to `_test.go`. References `examples/`.
+   on `GOEVAL`, use bundled templates when useful, attach to `_test.go`.
+   References `assets/templates/`.
 7. **Running** — commands table covering plain, with sink, with
    `GOEVAL_TRACE`, with bench, with case filter.
-8. **Reading results** — points at `report-template.md` and
-   `recommendations.md`.
+8. **Reading results** — points at `references/report-template.md` and
+   `references/recommendations.md`.
 9. **Common mistakes** — stateful metric configs, unsafe judges, missing
    `GOEVAL` gate, threshold copied without justification, `Faithfulness`
    case missing `Context`, comparing scores across judge model changes.
@@ -266,7 +269,7 @@ Body sections, in order:
 
 Target body length: under 500 words. Heavy reference goes in companions.
 
-#### `metrics-reference.md`
+#### `references/metrics-reference.md`
 
 One section per metric. Each section:
 
@@ -281,7 +284,7 @@ One section per metric. Each section:
 Loaded only when the skill follows a pointer (authoring or diagnosing a
 specific metric).
 
-#### `report-template.md`
+#### `references/report-template.md`
 
 Fixed schema the agent fills after `/eval run` or `/eval review`. The
 schema must degrade gracefully when data is missing (no sink → omit
@@ -336,7 +339,7 @@ Uncovered flows:                                <list>
 
 Section ordering is fixed so agents can extract sections deterministically.
 
-#### `recommendations.md`
+#### `references/recommendations.md`
 
 Heuristics the skill applies when filling the Recommendations section.
 Ordered by priority:
@@ -365,7 +368,7 @@ Ordered by priority:
 Each heuristic specifies its data source (single run / regression diff /
 historical sink) so it degrades cleanly when data is missing.
 
-#### `examples/`
+#### `assets/templates/`
 
 Two complete templates, adaptable not generic:
 
@@ -398,9 +401,10 @@ Modes:
   metric selection, draft `_eval_test.go` per the skill's authoring
   checklist.
 - run — execute `GOEVAL=1 GOEVAL_RESULTS_DIR=.eval-results/ go test -run
-  Eval ./...`, parse `results.jsonl`, fill `report-template.md`.
+  Eval ./...`, parse `results.jsonl`, fill
+  `references/report-template.md`.
 - review — read existing `results.jsonl` (and prior runs if present), fill
-  the report, surface recommendations from `recommendations.md`.
+  the report, surface recommendations from `references/recommendations.md`.
 
 Always write the report to stdout. If --save <path> provided, also write
 to path. If a prior report exists at the same path, include the

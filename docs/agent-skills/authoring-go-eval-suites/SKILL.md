@@ -7,6 +7,8 @@ description: Use when writing, running, or reviewing LLM evaluation suites with 
 
 Tests encode what a Go AI feature should do. Evals measure what its AI outputs actually do. Keep suites gated by `GOEVAL`, deterministic enough for CI, and explicit about what failure means.
 
+This directory is the canonical, agent-agnostic source for the workflow. Agent-specific files such as Claude commands should point here and avoid duplicating the full instructions.
+
 ## Use / Avoid
 
 Use this skill to design eval cases, pick `go-eval` metrics, wire a judge, run a suite, read `results.jsonl`, or turn failing scores into recommendations.
@@ -42,7 +44,7 @@ Do not use it to implement the agent flow itself, benchmark non-AI code, or chan
 | Cheap format or field checks | `Contains`, `Regex`, `JSONPath`, `FieldCount` |
 | Expensive judge only after cheap guard | `Precheck` |
 
-Read `metrics-reference.md` when authoring or diagnosing a specific metric.
+Read `references/metrics-reference.md` when authoring or diagnosing a specific metric.
 
 ## Authoring Checklist
 
@@ -51,7 +53,8 @@ Read `metrics-reference.md` when authoring or diagnosing a specific metric.
 3. Pick the smallest metric set that catches the failure mode.
 4. Set thresholds with a short reason; do not copy values blindly.
 5. Wire `eval.NewRunner(judge, eval.WithResultSink(eval.DefaultResultSink()))`.
-6. Keep evals in `_test.go`; rely on `GOEVAL` skip behavior for normal tests.
+6. Start from `assets/templates/` when a concrete suite shape is useful.
+7. Keep evals in `_test.go`; rely on `GOEVAL` skip behavior for normal tests.
 
 ## Run
 
@@ -67,7 +70,7 @@ Use `WithCaseFilter` for tiered runs, usually `tier == "critical"` in fast CI an
 
 ## Read Results
 
-Fill `report-template.md` after every run or review. Use `recommendations.md` to prioritize fixes. Omit unavailable sections cleanly: no sink means no regression, no token split means no prompt/completion budget detail, no `Compound` means no dimensions.
+Fill `references/report-template.md` after every run or review. Use `references/recommendations.md` to prioritize fixes. Omit unavailable sections cleanly: no sink means no regression, no token split means no prompt/completion budget detail, no `Compound` means no dimensions.
 
 ## Common Mistakes
 
