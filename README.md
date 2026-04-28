@@ -132,6 +132,20 @@ When `GOEVAL_RESULTS_DIR` is set, `DefaultResultSink` writes
 `metadata`. `Runner` copies `Case.Metadata` into the run result unless a metric
 sets `Result.Metadata` explicitly.
 
+Compare a baseline and current result file with the `compare` package:
+
+```go
+report, err := compare.CompareFiles("old/results.jsonl", "new/results.jsonl")
+if err != nil {
+	// handle malformed JSONL or file errors
+}
+```
+
+Rows are matched by `test_name` and `metric` by default. Use
+`compare.Options.Identity` when a separate case id is stored in metadata.
+Reports include added, missing, improved, regressed, and unchanged entries, with
+score, pass/fail, token, latency, and Compound dimension deltas.
+
 Use `WithCaseFilter` to run a selected slice of cases, for example a
 critical-only CI path:
 

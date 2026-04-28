@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Split token counts (`PromptTokens`, `CompletionTokens`) on judge responses, results, and JSONL sink rows
 - `WithCaseFilter` runner option for skipping cases by metadata or custom predicates
 - `authoring-go-eval-suites` agent skill and Claude `/eval` command for designing, running, and reviewing eval suites
+- `compare` package for baseline-vs-current JSONL result regression diffs
 
 ## [v0.2.0] - 2026-04-22
 
