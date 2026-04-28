@@ -1,0 +1,23 @@
+docs/getting_started_test.go
+  90f19e278e13a363 104-105
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "e2bbecfbfdd7bfdd904ad8754a555ec0b71316d0",
+  "prompts": {
+    "90f19e278e13a363": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019dd660-b94b-7c41-9cec-9923d1120b62",
+        "model": "gpt-5.5"
+      },
+      "human_author": "igcodinap",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 0,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    }
+  }
+}
