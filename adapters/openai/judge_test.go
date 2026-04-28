@@ -92,11 +92,17 @@ type stubCompletion struct {
 
 func newStubJudge(t *testing.T, completions []stubCompletion) (*Judge, *int) {
 	t.Helper()
+	if len(completions) == 0 {
+		t.Fatal("newStubJudge requires at least one completion")
+	}
 
 	calls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/chat/completions" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
+			msg := "unexpected path: " + r.URL.Path
+			t.Error(msg)
+			http.Error(w, msg, http.StatusInternalServerError)
+			return
 		}
 
 		idx := calls
@@ -129,7 +135,9 @@ func newStubJudge(t *testing.T, completions []stubCompletion) (*Judge, *int) {
 			},
 		})
 		if err != nil {
-			t.Fatalf("encode response: %v", err)
+			msg := "encode response: " + err.Error()
+			t.Error(msg)
+			http.Error(w, msg, http.StatusInternalServerError)
 		}
 	}))
 	t.Cleanup(server.Close)

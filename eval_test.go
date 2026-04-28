@@ -148,7 +148,9 @@ func TestRunner_WithCaseFilterSkipsUnmatchedCase(t *testing.T) {
 	if metric.calls != 0 {
 		t.Fatalf("expected skipped case not to call metric, got %d calls", metric.calls)
 	}
-	if got.Score != 0 || got.Passed || got.Metric != "" || got.Reason != "" || got.Tokens != 0 || got.Metadata != nil {
+	if got.Score != 0 || got.Passed || got.Metric != "" || got.Reason != "" ||
+		got.Tokens != 0 || got.PromptTokens != 0 || got.CompletionTokens != 0 ||
+		got.Metadata != nil {
 		t.Fatalf("expected zero result for skipped case, got %+v", got)
 	}
 }
