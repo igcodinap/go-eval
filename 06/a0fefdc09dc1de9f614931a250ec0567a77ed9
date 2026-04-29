@@ -1,0 +1,46 @@
+README.md
+  e50a7525e2aab2de 28-35,163,167-170,238-278,308-310,314,317
+adapters/ollama/judge_test.go
+  e50a7525e2aab2de 1-247
+docs/getting-started.md
+  e50a7525e2aab2de 25-30,91-139
+adapters/ollama/go.mod
+  e50a7525e2aab2de 1-7
+adapters/ollama/judge.go
+  e50a7525e2aab2de 1-261
+CHANGELOG.md
+  e50a7525e2aab2de 10-11,22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "06a0fefdc09dc1de9f614931a250ec0567a77ed9",
+  "prompts": {
+    "90f19e278e13a363": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019dd660-b94b-7c41-9cec-9923d1120b62",
+        "model": "gpt-5.5"
+      },
+      "human_author": "igcodinap",
+      "messages": [],
+      "total_additions": 314,
+      "total_deletions": 0,
+      "accepted_lines": 307,
+      "overriden_lines": 8
+    },
+    "e50a7525e2aab2de": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019dd684-091d-71a0-a065-286d2b215ace",
+        "model": "gpt-5.5"
+      },
+      "human_author": "igcodinap",
+      "messages": [],
+      "total_additions": 633,
+      "total_deletions": 8,
+      "accepted_lines": 633,
+      "overriden_lines": 0
+    }
+  }
+}
