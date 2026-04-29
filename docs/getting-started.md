@@ -22,6 +22,12 @@ stdlib-only:
 go get github.com/igcodinap/go-eval/adapters/openai github.com/sashabaranov/go-openai
 ```
 
+The optional Ollama judge adapter is also separate:
+
+```bash
+go get github.com/igcodinap/go-eval/adapters/ollama
+```
+
 ## Copy a Minimal Eval
 
 Create `answer_eval_test.go` next to the code you want to evaluate.
@@ -81,6 +87,56 @@ GOEVAL=1 go test ./...
 Without `GOEVAL=1`, the eval calls skip. With `GOEVAL=1`, `Runner` executes each
 metric and reports low scores with `t.Errorf`. Judge or metric execution errors
 are fatal.
+
+## Use an Ollama Judge
+
+Use the Ollama adapter when you want local LLM-as-judge scoring. Start Ollama
+and pull the model before running the eval:
+
+```bash
+ollama serve
+ollama pull llama3.2
+```
+
+Then create a judge from your test:
+
+```go
+package yourpkg_test
+
+import (
+	"os"
+	"testing"
+
+	eval "github.com/igcodinap/go-eval"
+	ollamaeval "github.com/igcodinap/go-eval/adapters/ollama"
+)
+
+func TestOllamaEval(t *testing.T) {
+	if os.Getenv(eval.EnvVar) == "" {
+		t.Skip("eval skipped, set GOEVAL=1 to run")
+	}
+
+	judge := ollamaeval.NewJudge("llama3.2")
+	r := eval.NewRunner(judge, eval.WithResultSink(eval.DefaultResultSink()))
+
+	c := eval.Case{
+		Input:   "What is the capital of France?",
+		Output:  "Paris is the capital of France.",
+		Context: []string{"Paris is the capital of France."},
+	}
+
+	r.Run(t, eval.Faithfulness{Threshold: 0.8}, c)
+}
+```
+
+Run it with the eval gate:
+
+```bash
+GOEVAL=1 go test ./...
+```
+
+Use `ollamaeval.WithBaseURL("http://localhost:11434")` when your Ollama server
+is not on the default local endpoint.
 
 ## Use an OpenAI Judge
 

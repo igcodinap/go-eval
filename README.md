@@ -25,6 +25,14 @@ Install the optional CLI:
 go install github.com/igcodinap/go-eval/cmd/goeval@latest
 ```
 
+Optional judge adapters live in separate modules so the core package stays
+stdlib-only:
+
+```bash
+go get github.com/igcodinap/go-eval/adapters/ollama
+go get github.com/igcodinap/go-eval/adapters/openai github.com/sashabaranov/go-openai
+```
+
 ## Quickstart
 
 For a full walkthrough with copyable evals, an OpenAI-backed judge, JSONL
@@ -152,12 +160,14 @@ GOEVAL=1 GOEVAL_TRACE=1 go test -v -run TestFaithfulness
 | Runs inside test framework  | pytest              | `go test` / `go test -bench` |
 | External platform required  | no                  | no                           |
 | Dependencies in core        | pydantic, pytest    | stdlib only                  |
-| Agent / conversation evals  | yes                 | planned v0.3                 |
+| Agent / conversation evals  | yes                 | planned                      |
 | Dataset loaders             | YAML/JSON           | JSON in core, YAML deferred  |
 | HTML / JSON reports         | yes                 | via `go test -json`          |
 
-`go-eval` is intentionally smaller. v0.2 covers the common case:
-scoring RAG-style and deterministic evaluation cases in a CI-friendly way.
+`go-eval` is intentionally smaller. v0.3 covers the common case:
+scoring RAG-style and deterministic evaluation cases in a CI-friendly way,
+loading JSON datasets, comparing JSONL result runs, and using local Ollama
+judges.
 
 ## Benchmarks
 
@@ -225,6 +235,47 @@ r := eval.NewRunner(judge, eval.WithCaseFilter(func(c eval.Case) bool {
 }))
 ```
 
+## Ollama Judge Adapter
+
+Use the Ollama adapter when you want local LLM-as-judge scoring:
+
+```go
+package yourpkg_test
+
+import (
+	"os"
+	"testing"
+
+	eval "github.com/igcodinap/go-eval"
+	ollamaeval "github.com/igcodinap/go-eval/adapters/ollama"
+)
+
+func TestOllamaEval(t *testing.T) {
+	if os.Getenv(eval.EnvVar) == "" {
+		t.Skip("eval skipped, set GOEVAL=1 to run")
+	}
+
+	judge := ollamaeval.NewJudge("llama3.2")
+	r := eval.NewRunner(judge)
+
+	r.Run(t, eval.Faithfulness{Threshold: 0.8}, eval.Case{
+		Input:   "What is the capital of France?",
+		Output:  "Paris is the capital of France.",
+		Context: []string{"Paris is the capital of France."},
+	})
+}
+```
+
+For non-default servers, configure the local endpoint and HTTP client:
+
+```go
+judge := ollamaeval.NewJudge(
+	"llama3.2",
+	ollamaeval.WithBaseURL("http://localhost:11434"),
+	ollamaeval.WithHTTPClient(http.DefaultClient),
+)
+```
+
 ## Agent skill
 
 The repo ships an agentskills.io-style guide for coding agents that need to
@@ -254,16 +305,16 @@ See `examples/openai_judge/` for a reference implementation.
 
 ## Status
 
-v0.2 - Compound, deterministic metrics, OpenAI adapter module, and opt-in
-result sinks are included. API may change before v1.0.
+v0.3 - JSON datasets, result comparison, Ollama and OpenAI adapter modules,
+Compound, deterministic metrics, and opt-in result sinks are included. API may
+change before v1.0.
 
 ## Roadmap
 
-v0.3 planned scope:
+Planned scope:
 1. Conversation evaluation model (`ConversationCase`, `ConversationMetric`, `RunConversation`)
 2. YAML loader submodule (core remains stdlib-only)
-3. Compare/regression package for baseline-vs-current result diffs
-4. Additional adapters (`Genkit`, `Ollama`)
+3. Additional adapters beyond Ollama (`Genkit`, `Anthropic`, `Gemini`)
 
 ## License
 

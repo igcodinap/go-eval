@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [v0.3.0] - 2026-04-29
+
 ### Added
 
 - `RunResult.Metadata` in JSONL result sinks, copied from `Case.Metadata` by default
@@ -17,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Minimal `goeval` CLI with `test`, `compare`, and `version` commands
 - JSON dataset loader (`LoadCases`, `LoadNamedCases`, `LoadDataset`) for external golden cases
 - Getting Started guide covering local judges, OpenAI, metrics, JSONL results, and benchmarks
+- Ollama judge adapter (`adapters/ollama`) for local HTTP API scoring
 
 ## [v0.2.0] - 2026-04-22
 
