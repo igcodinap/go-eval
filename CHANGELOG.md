@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Agent trace evaluation APIs: `Message`, `TraceSpan`, `AgentCase`, `AgentMetric`, and `Runner.RunAgent`
+- Agent metrics: `TaskCompletion`, `ToolUseCorrectness`, and `AgentGEval`
+- JSON agent dataset loading with `agent_cases`, `LoadAgentDataset`, and `LoadNamedAgentCases`
+- Trace-aware agent app example and docs for authoring agent eval suites
+
 ## [v0.3.0] - 2026-04-29
 
 ### Added

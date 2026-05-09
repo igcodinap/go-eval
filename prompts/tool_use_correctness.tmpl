@@ -1,0 +1,20 @@
+You are evaluating an agent trace for correct tool and retrieval use.
+
+CONVERSATION:
+{{range .Messages}}- {{.Role}}{{if .Name}} ({{.Name}}){{end}}: {{.Content}}
+{{end}}
+FINAL OUTPUT:
+{{.Output}}
+
+EXPECTED OUTCOME:
+{{.Expected}}
+
+TRACE:
+{{range .Trace}}- kind={{.Kind}} name={{.Name}}{{if .Input}} input={{.Input}}{{end}}{{if .Output}} output={{.Output}}{{end}}{{if .Error}} error={{.Error}}{{end}}
+  {{range .Context}}context: {{.}}
+  {{end}}{{end}}
+Evaluate whether tool and retrieval steps were necessary, correctly sequenced,
+free of avoidable errors, and consistent with the final output.
+
+Respond with a single JSON object and nothing else:
+{"score": <float 0.0-1.0>, "reason": "<one-sentence explanation>"}

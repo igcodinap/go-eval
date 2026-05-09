@@ -1,0 +1,28 @@
+You are evaluating an agent run against a custom rubric.
+
+CRITERIA:
+{{.Criteria}}
+{{if .Steps}}
+EVALUATION STEPS (follow in order):
+{{range $i, $step := .Steps}}{{add $i 1}}. {{$step}}
+{{end}}{{end}}
+CONVERSATION:
+{{range .Messages}}- {{.Role}}{{if .Name}} ({{.Name}}){{end}}: {{.Content}}
+{{end}}
+EXPECTED OUTCOME:
+{{.Expected}}
+
+FINAL OUTPUT:
+{{.Output}}
+
+AVAILABLE CONTEXT:
+{{range .Context}}- {{.}}
+{{end}}
+TRACE:
+{{range .Trace}}- kind={{.Kind}} name={{.Name}}{{if .Input}} input={{.Input}}{{end}}{{if .Output}} output={{.Output}}{{end}}{{if .Error}} error={{.Error}}{{end}}
+{{end}}
+Return a score from 0.0 (fails the criteria entirely) to 1.0 (meets the
+criteria perfectly).
+
+Respond with a single JSON object and nothing else:
+{"score": <float 0.0-1.0>, "reason": "<one-sentence explanation>"}

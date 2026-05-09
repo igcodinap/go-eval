@@ -59,6 +59,39 @@ For LLM-judge metrics, "typically needed fields" are not hard-validated by the l
 - Anti-pattern: vague criteria such as "answer well" without observable requirements.
 - Prompt: `prompts/geval.tmpl`.
 
+## TaskCompletion
+
+- Typically needed fields: `AgentCase.Messages`, `AgentCase.Output`, `AgentCase.Expected`.
+- Optional fields: `AgentCase.Context`, `AgentCase.Trace`.
+- Score: judge estimate that the final agent output satisfies the user's goal and expected outcome.
+- Default threshold: `0.8`.
+- Use for: end-to-end agent task success.
+- Avoid for: diagnosing tool sequencing; pair with `ToolUseCorrectness`.
+- Anti-pattern: leaving `Expected` vague when the task has clear success criteria.
+- Prompt: `prompts/task_completion.tmpl`.
+
+## ToolUseCorrectness
+
+- Typically needed fields: `AgentCase.Messages`, `AgentCase.Output`, `AgentCase.Trace`.
+- Optional fields: `AgentCase.Expected`, `AgentCase.Context`.
+- Score: judge estimate that tool/retrieval steps were necessary, correctly sequenced, and consistent with the final answer.
+- Default threshold: `0.8`.
+- Use for: tool-calling agents, retrieval agents, multi-step workflows.
+- Avoid for: pure single-turn answer quality; use `AnswerRelevancy`, `Faithfulness`, or `TaskCompletion`.
+- Anti-pattern: storing sensitive tool payloads in result metadata instead of trace-only test inputs.
+- Prompt: `prompts/tool_use_correctness.tmpl`.
+
+## AgentGEval
+
+- Typically needed fields: whatever the custom `Criteria` and optional `Steps` inspect.
+- Optional fields: all `AgentCase` fields may be referenced by the rubric.
+- Score: judge applies a custom rubric to messages, final output, context, and trace.
+- Default threshold: `0.7`.
+- Use for: domain-specific agent policies and workflow quality.
+- Avoid for: checks that deterministic output assertions can catch.
+- Anti-pattern: mixing unrelated task, safety, and trace concerns into one broad rubric.
+- Prompt: `prompts/agent_geval.tmpl`.
+
 ## Compound
 
 - Typically needed fields: fields used by each dimension.

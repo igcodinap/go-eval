@@ -4,8 +4,9 @@
 
 `go-eval` brings LLM-as-judge metrics to the Go ecosystem.
 Core metrics (Faithfulness, Hallucination, AnswerRelevancy, ContextPrecision,
-GEval, Compound) and deterministic checks run inside standard `go test`, with
-benchmarks, `-parallel`, subtests, and CI integration working out of the box.
+GEval, Compound), agent trace metrics, and deterministic checks run inside
+standard `go test`, with benchmarks, `-parallel`, subtests, and CI integration
+working out of the box.
 
 ## Why
 
@@ -124,6 +125,25 @@ Use `LoadCases` when names are not needed. The loader is JSON-only and
 stdlib-only; YAML support is deferred to a future subpackage or module so the
 core package stays dependency-free.
 
+Agent datasets use a separate top-level key so trace-aware cases cannot be
+confused with single-turn cases:
+
+```json
+{
+  "agent_cases": [
+    {
+      "name": "order-status",
+      "messages": [{"role": "user", "content": "Where is my order?"}],
+      "expected": "Answer with delivery status.",
+      "trace": [{"kind": "tool", "name": "orders.lookup"}],
+      "metadata": {"flow": "support.lookup", "tier": "critical"}
+    }
+  ]
+}
+```
+
+Use `LoadNamedAgentCases` for table-driven agent evals.
+
 ### Tracing judge I/O
 
 Set `GOEVAL_TRACE=1` alongside `GOEVAL=1` to dump every judge prompt and
@@ -145,6 +165,9 @@ GOEVAL=1 GOEVAL_TRACE=1 go test -v -run TestFaithfulness
 | `AnswerRelevancy`  | Output addresses Input                                 | 0.7               |
 | `ContextPrecision` | Retrieved docs are relevant to Input                   | 0.7               |
 | `GEval`            | Custom rubric with Criteria and optional Steps         | 0.7               |
+| `TaskCompletion`   | Agent final output satisfies goal and Expected         | 0.8               |
+| `ToolUseCorrectness` | Agent tool/retrieval trace is necessary and consistent | 0.8             |
+| `AgentGEval`       | Custom rubric over messages, output, context, trace    | 0.7               |
 | `Compound`         | Multiple rubric dimensions in one judge call           | per-dimension     |
 | `Contains`         | Output contains expected substring                      | binary            |
 | `Regex`            | Output matches a regex                                 | binary            |
@@ -160,14 +183,39 @@ GOEVAL=1 GOEVAL_TRACE=1 go test -v -run TestFaithfulness
 | Runs inside test framework  | pytest              | `go test` / `go test -bench` |
 | External platform required  | no                  | no                           |
 | Dependencies in core        | pydantic, pytest    | stdlib only                  |
-| Agent / conversation evals  | yes                 | planned                      |
+| Agent / conversation evals  | yes                 | agent traces yes             |
 | Dataset loaders             | YAML/JSON           | JSON in core, YAML deferred  |
 | HTML / JSON reports         | yes                 | via `go test -json`          |
 
-`go-eval` is intentionally smaller. v0.3 covers the common case:
-scoring RAG-style and deterministic evaluation cases in a CI-friendly way,
-loading JSON datasets, comparing JSONL result runs, and using local Ollama
-judges.
+`go-eval` is intentionally smaller. v0.4 covers RAG-style, deterministic, and
+agent trace evaluation cases in a CI-friendly way, loading JSON datasets,
+comparing JSONL result runs, and using local Ollama judges.
+
+## Agent Trace Evals
+
+Use `AgentCase` when the behavior depends on a multi-turn conversation and a
+trace of tool, retrieval, or LLM steps:
+
+```go
+c := eval.AgentCase{
+	Messages: []eval.Message{
+		{Role: eval.RoleUser, Content: "Where is my order?"},
+	},
+	Output:   "Your order arrives tomorrow.",
+	Expected: "Answer with delivery status.",
+	Trace: []eval.TraceSpan{
+		{Kind: eval.SpanTool, Name: "orders.lookup", Output: "delivery_date=tomorrow"},
+	},
+	Metadata: map[string]any{"flow": "support.lookup", "tier": "critical"},
+}
+
+r.RunAgent(t, eval.TaskCompletion{Threshold: 0.8}, c)
+r.RunAgent(t, eval.ToolUseCorrectness{Threshold: 0.8}, c)
+```
+
+`RunAgent` follows the same `GOEVAL`, timeout, result sink, tracing, and case
+filter behavior as `Run`. Result JSONL rows keep metadata, but not full traces,
+so sensitive tool payloads are not persisted by default.
 
 ## Benchmarks
 
@@ -305,16 +353,16 @@ See `examples/openai_judge/` for a reference implementation.
 
 ## Status
 
-v0.3 - JSON datasets, result comparison, Ollama and OpenAI adapter modules,
-Compound, deterministic metrics, and opt-in result sinks are included. API may
-change before v1.0.
+v0.4 - Agent trace evaluation, JSON agent datasets, result comparison, Ollama
+and OpenAI adapter modules, Compound, deterministic metrics, and opt-in result
+sinks are included. API may change before v1.0.
 
 ## Roadmap
 
 Planned scope:
-1. Conversation evaluation model (`ConversationCase`, `ConversationMetric`, `RunConversation`)
-2. YAML loader submodule (core remains stdlib-only)
-3. Additional adapters beyond Ollama (`Genkit`, `Anthropic`, `Gemini`)
+1. YAML loader submodule (core remains stdlib-only)
+2. Additional adapters beyond Ollama (`Genkit`, `Anthropic`, `Gemini`)
+3. Hosted reporting and richer trace coverage summaries
 
 ## License
 

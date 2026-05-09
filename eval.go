@@ -72,29 +72,57 @@ func (r *Runner) Run(tb testing.TB, m Metric, c Case) Result {
 		return Result{}
 	}
 
+	return r.runResult(tb, m.Name(), func(ctx context.Context, j Judge) (Result, error) {
+		return m.Score(ctx, j, c)
+	}, c.Metadata)
+}
+
+// RunAgent executes one agent metric against one agent case and asserts via tb.
+//
+// It mirrors Run while scoring an AgentCase with an AgentMetric. Case filters
+// apply to the AgentCase metadata through the same Case view used by Run.
+func (r *Runner) RunAgent(tb testing.TB, m AgentMetric, c AgentCase) Result {
+	tb.Helper()
+
+	if os.Getenv(EnvVar) == "" {
+		tb.Skip("eval skipped, set " + EnvVar + "=1 to run")
+		return Result{}
+	}
+	if r.caseFilter != nil && !r.caseFilter(c.caseView()) {
+		tb.Skip("eval skipped by case filter")
+		return Result{}
+	}
+
+	return r.runResult(tb, m.Name(), func(ctx context.Context, j Judge) (Result, error) {
+		return m.ScoreAgent(ctx, j, c)
+	}, c.Metadata)
+}
+
+func (r *Runner) runResult(
+	tb testing.TB,
+	metricName string,
+	score func(context.Context, Judge) (Result, error),
+	metadata map[string]any,
+) Result {
 	ctx, cancel := runnerContext(r.timeout)
 	defer cancel()
 
 	judge := maybeTrace(r.judge, tb)
 
 	start := time.Now()
-	result, err := m.Score(ctx, judge, c)
-	if result.Metadata == nil && len(c.Metadata) > 0 {
-		metadata := make(map[string]any, len(c.Metadata))
-		for k, v := range c.Metadata {
-			metadata[k] = v
-		}
-		result.Metadata = metadata
+	result, err := score(ctx, judge)
+	if result.Metadata == nil && len(metadata) > 0 {
+		result.Metadata = copyMetadata(metadata)
 	}
 	if result.Metric == "" {
-		result.Metric = m.Name()
+		result.Metric = metricName
 	}
 	if result.Latency == 0 {
 		result.Latency = time.Since(start)
 	}
 
 	if err != nil {
-		tb.Fatalf("%s: judge error: %v", m.Name(), err)
+		tb.Fatalf("%s: judge error: %v", metricName, err)
 		return result
 	}
 
@@ -107,6 +135,14 @@ func (r *Runner) Run(tb testing.TB, m Metric, c Case) Result {
 	tb.Logf("%s=%.2f pass (reason: %s)", result.Metric, result.Score, result.Reason)
 	r.writeResult(tb, result)
 	return result
+}
+
+func copyMetadata(metadata map[string]any) map[string]any {
+	out := make(map[string]any, len(metadata))
+	for k, v := range metadata {
+		out[k] = v
+	}
+	return out
 }
 
 func (r *Runner) writeResult(tb testing.TB, result Result) {

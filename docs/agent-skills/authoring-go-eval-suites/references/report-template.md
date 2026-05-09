@@ -41,6 +41,9 @@ Newly passing:  <list>
 
 ## Coverage
 Agent flows declared in Case.Metadata["flow"]:  <set>
+Agent flows declared in AgentCase.Metadata["flow"]: <set>
+Trace span kinds covered:                       <tool|retrieval|llm>
+Trace span names covered:                       <set>
 Flows found in agent code, best effort:         <set>
 Uncovered flows:                                <list>
 

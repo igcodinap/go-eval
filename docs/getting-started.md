@@ -2,8 +2,8 @@
 
 This guide starts with a local, deterministic eval you can copy into any Go
 project. Then it shows the same shape with an OpenAI-backed judge, RAG metrics,
-deterministic checks, `Compound`, `Precheck`, JSONL result output, and
-benchmarks.
+agent trace metrics, deterministic checks, `Compound`, `Precheck`, JSONL result
+output, and benchmarks.
 
 `go-eval` runs inside `go test`. Eval runs are opt-in: `Runner.Run` and
 `eval.Bench` skip unless `GOEVAL=1` is set. This keeps normal local runs and CI
@@ -87,6 +87,51 @@ GOEVAL=1 go test ./...
 Without `GOEVAL=1`, the eval calls skip. With `GOEVAL=1`, `Runner` executes each
 metric and reports low scores with `t.Errorf`. Judge or metric execution errors
 are fatal.
+
+## Evaluate an Agent Trace
+
+Use `AgentCase` for multi-turn workflows that call tools, retrieve context, or
+make multiple LLM calls.
+
+```go
+func TestAgentTraceEval(t *testing.T) {
+	judge := deterministicJudge{}
+	r := eval.NewRunner(judge)
+
+	c := eval.AgentCase{
+		Messages: []eval.Message{
+			{Role: eval.RoleUser, Content: "Where is my order?"},
+		},
+		Output:   "Your order arrives tomorrow.",
+		Expected: "Answer with delivery status.",
+		Context:  []string{"Order 42 delivery date: tomorrow."},
+		Trace: []eval.TraceSpan{
+			{
+				Kind:   eval.SpanTool,
+				Name:   "orders.lookup",
+				Input:  "order_id=42",
+				Output: "delivery_date=tomorrow",
+			},
+		},
+		Metadata: map[string]any{
+			"flow":    "support.lookup",
+			"tier":    "critical",
+			"dataset": "agent-smoke/v1",
+		},
+	}
+
+	r.RunAgent(t, eval.TaskCompletion{Threshold: 0.8}, c)
+	r.RunAgent(t, eval.ToolUseCorrectness{Threshold: 0.8}, c)
+	r.RunAgent(t, eval.AgentGEval{
+		Criteria:  "The agent must provide a concise, grounded status update.",
+		Threshold: 0.7,
+	}, c)
+}
+```
+
+`RunAgent` has the same eval gate, timeout, result sink, tracing, and
+`WithCaseFilter` behavior as `Run`. Result JSONL rows copy `AgentCase.Metadata`
+but do not persist full traces by default.
 
 ## Use an Ollama Judge
 
