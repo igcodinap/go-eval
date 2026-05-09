@@ -16,6 +16,8 @@ func (scriptedJudge) Evaluate(ctx context.Context, prompt string) (eval.JudgeRes
 }
 
 func TestAgentEvalSuite(t *testing.T) {
+	t.Setenv(eval.EnvVar, "1")
+
 	agent := &Agent{Orders: map[string]string{"42": "arrives tomorrow"}}
 	r := eval.NewRunner(scriptedJudge{})
 
