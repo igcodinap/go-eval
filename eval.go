@@ -104,6 +104,8 @@ func (r *Runner) runResult(
 	score func(context.Context, Judge) (Result, error),
 	metadata map[string]any,
 ) Result {
+	tb.Helper()
+
 	ctx, cancel := runnerContext(r.timeout)
 	defer cancel()
 

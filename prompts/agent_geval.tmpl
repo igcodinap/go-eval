@@ -15,12 +15,14 @@ EXPECTED OUTCOME:
 FINAL OUTPUT:
 {{.Output}}
 
+{{if .Context}}
 AVAILABLE CONTEXT:
 {{range .Context}}- {{.}}
-{{end}}
+{{end}}{{end}}
+{{if .Trace}}
 TRACE:
 {{range .Trace}}- kind={{.Kind}} name={{.Name}}{{if .Input}} input={{.Input}}{{end}}{{if .Output}} output={{.Output}}{{end}}{{if .Error}} error={{.Error}}{{end}}
-{{end}}
+{{end}}{{end}}
 Return a score from 0.0 (fails the criteria entirely) to 1.0 (meets the
 criteria perfectly).
 
