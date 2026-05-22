@@ -450,10 +450,10 @@ See `examples/openai_judge/` for a reference implementation.
 
 ## Status
 
-v0.4 is tagged. Main now includes the v0.5/v0.6 trajectory work: typed
-conversation turns, tool-call expectations, deterministic trajectory metrics,
-repeat/flakiness helpers, JSONL comparison and summaries, structured artifacts,
-budget wrappers, and opt-in result sinks. API may change before v1.0.
+v0.6 includes the v0.5/v0.6 trajectory work: typed conversation turns,
+tool-call expectations, deterministic trajectory metrics, repeat/flakiness
+helpers, JSONL comparison and summaries, structured artifacts, budget wrappers,
+and opt-in result sinks. API may change before v1.0.
 
 ## Roadmap
 
