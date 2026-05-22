@@ -1,0 +1,91 @@
+tool_call_f1_test.go
+  s_27ed766b9b5175::t_da31e925da5e22 39-41,44-45,48-59
+  s_27ed766b9b5175::t_f4b94b6ff84cd2 5,42-43,46-47
+  s_27ed766b9b5175::t_35bbd6be4fdcab 1-4,6-38,60-85
+docs/getting_started_test.go
+  s_27ed766b9b5175::t_ddc40af9f5c790 5,92-113
+forbidden_tool_test.go
+  s_27ed766b9b5175::t_b63e0a993b66f1 1-41
+trajectory.go
+  s_27ed766b9b5175::t_7f9d1a29b64500 1-157
+tool_call_accuracy_test.go
+  s_27ed766b9b5175::t_e1b05a246b5315 72-86
+  s_27ed766b9b5175::t_e54ce2c7c8b3c8 1-71,87-142
+dataset_test.go
+  s_27ed766b9b5175::t_58405d7a6aea68 20-39,67-72,80-82,247-269,295-300
+  s_27ed766b9b5175::t_68544c5f50fe28 73-78
+tool_call_accuracy.go
+  s_27ed766b9b5175::t_d24000cb8367f8 1-91
+cmd/goeval/main_test.go
+  s_27ed766b9b5175::t_f5244fb3ceba1e 111-137,166,186-194
+docs/agent-skills/authoring-go-eval-suites/references/metrics-reference.md
+  s_27ed766b9b5175::t_5a0be33b04c234 124-126,136-137,154
+  s_27ed766b9b5175::t_cb345712c658db 118-123,127-135,138-153,155-167
+turn.go
+  s_27ed766b9b5175::t_e813c7507c22cd 21-22,37-38
+  s_27ed766b9b5175::t_ebab90e0d02868 23,36
+  s_27ed766b9b5175::t_cb95bedb0bb2aa 1-20,24-35,39
+step_budget_test.go
+  s_27ed766b9b5175::t_5fff7028546446 1-18,21-37,56-73
+  s_27ed766b9b5175::t_f6f55a59f099bd 19-20
+  s_27ed766b9b5175::t_df213129ee8d28 38-55
+forbidden_tool.go
+  s_27ed766b9b5175::t_c2041e08131a11 1-51
+repeat.go
+  s_27ed766b9b5175::t_1040a2d51bcd06 1-6,8-47,54,56-105,107-115
+  s_27ed766b9b5175::t_d98be12f7075f4 48-53,55
+  s_27ed766b9b5175::t_fb80928f2c82f4 7,106
+docs/proposals/0001-v0.3-evaluation-core.md
+  s_27ed766b9b5175::t_dbd668a6acfb3f 3,8-10
+  s_27ed766b9b5175::t_44dcf841c31136 11-12,69-73
+CHANGELOG.md
+  s_27ed766b9b5175::t_298f18bfd70786 10-22
+dataset.go
+  s_27ed766b9b5175::t_27eb2a2e41e1b0 25-26,85-93,109-116,122-130
+repeat_test.go
+  s_27ed766b9b5175::t_2414af0f18e9c0 1-83,86-114
+  s_27ed766b9b5175::t_c0b818d57cd8c0 84-85
+compare/summary_test.go
+  s_27ed766b9b5175::t_4caad3d35bfc67 1-3,5-60,63-65
+  s_27ed766b9b5175::t_7055cbbd8c6605 4,61-62
+turn_test.go
+  s_27ed766b9b5175::t_ddddd33b900dec 1-59
+cmd/goeval/main.go
+  s_27ed766b9b5175::t_72f2176d3297a7 10,24,28-31,58-59,105-120,147-176
+step_budget.go
+  s_27ed766b9b5175::t_62048f353ab5ed 31
+  s_27ed766b9b5175::t_76d21d9729f051 1-30,32-44
+case_test.go
+  s_27ed766b9b5175::t_8eb300df099f48 14-25,38-42
+docs/getting-started.md
+  s_27ed766b9b5175::t_a344a7486b6546 256
+  s_27ed766b9b5175::t_a50ddb52f19080 6,228-255,257-260,265-275
+  s_27ed766b9b5175::t_6d736b78d1720d 261-264
+compare/summary.go
+  s_27ed766b9b5175::t_19ea0465f64245 1-113
+tool_call_f1.go
+  s_27ed766b9b5175::t_b1e2e5df30f02d 1-52
+docs/agent-skills/authoring-go-eval-suites/references/report-template.md
+  s_27ed766b9b5175::t_4d39f786d76e12 21-25,49,59-60
+README.md
+  s_27ed766b9b5175::t_d2699531e6ef3c 269-277
+  s_27ed766b9b5175::t_2e0be3ddf88fdf 7-9,93-108,178-182,233-268,278-285,296,298,300-303,368,372,453-456,464,467-472,475
+case.go
+  s_27ed766b9b5175::t_e19caf4448c8b7 9-14,16-24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.0",
+  "base_commit_sha": "b925b332487e752e2f7aa73ae9bdc26e31b7c9b9",
+  "prompts": {},
+  "sessions": {
+    "s_27ed766b9b5175": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e508e-0e14-7e80-ab68-3f87d65b5909",
+        "model": "gpt-5.5"
+      },
+      "human_author": "igcodinap <igcodinap@users.noreply.github.com>"
+    }
+  }
+}
