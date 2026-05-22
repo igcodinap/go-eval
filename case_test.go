@@ -1,6 +1,9 @@
 package eval
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestCase_FieldsAccessibleViaStructLiteral(t *testing.T) {
 	c := Case{
@@ -9,6 +12,9 @@ func TestCase_FieldsAccessibleViaStructLiteral(t *testing.T) {
 		Expected: "e",
 		Context:  []string{"doc1", "doc2"},
 		Metadata: map[string]any{"trace_id": "abc"},
+		Artifacts: map[string]json.RawMessage{
+			"state": json.RawMessage(`{"status":"ready"}`),
+		},
 	}
 
 	if c.Input != "q" || c.Output != "a" || c.Expected != "e" {
@@ -19,5 +25,8 @@ func TestCase_FieldsAccessibleViaStructLiteral(t *testing.T) {
 	}
 	if c.Metadata["trace_id"] != "abc" {
 		t.Fatalf("unexpected Metadata: %+v", c.Metadata)
+	}
+	if string(c.Artifacts["state"]) != `{"status":"ready"}` {
+		t.Fatalf("unexpected Artifacts: %+v", c.Artifacts)
 	}
 }

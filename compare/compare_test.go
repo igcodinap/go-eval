@@ -129,12 +129,8 @@ func TestCompareWithOptionsUsesCaseIdentity(t *testing.T) {
 		{TestName: "TestEval", Metric: "Faithfulness", Score: 0.7, Passed: true, Metadata: map[string]any{"case_id": "a"}},
 		{TestName: "TestEval", Metric: "Faithfulness", Score: 0.6, Passed: true, Metadata: map[string]any{"case_id": "b"}},
 	}
-	identity := func(result eval.RunResult) Identity {
-		caseName, _ := result.Metadata["case_id"].(string)
-		return Identity{TestName: result.TestName, CaseName: caseName, Metric: result.Metric}
-	}
 
-	report := CompareWithOptions(baseline, current, Options{Identity: identity})
+	report := CompareWithOptions(baseline, current, Options{Identity: CaseIDFromMetadata("")})
 
 	if len(report.Entries) != 2 {
 		t.Fatalf("expected 2 entries, got %d", len(report.Entries))
@@ -144,6 +140,20 @@ func TestCompareWithOptionsUsesCaseIdentity(t *testing.T) {
 	}
 	if report.Entries[1].Identity.CaseName != "b" || report.Entries[1].Status != StatusImproved {
 		t.Fatalf("unexpected second entry: %+v", report.Entries[1])
+	}
+}
+
+func TestCaseIDFromMetadataUsesCustomKeyAndFormatsValues(t *testing.T) {
+	identity := CaseIDFromMetadata("id")
+
+	got := identity(eval.RunResult{
+		TestName: "TestEval",
+		Metric:   "ArtifactJSONPath",
+		Metadata: map[string]any{"id": float64(42)},
+	})
+
+	if got.TestName != "TestEval" || got.CaseName != "42" || got.Metric != "ArtifactJSONPath" {
+		t.Fatalf("unexpected identity: %+v", got)
 	}
 }
 

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- `Case.Artifacts` for named structured JSON outputs alongside text output
+- Artifact metrics: `ArtifactExists`, `ArtifactJSONPath`, `ArtifactFieldCount`, `ArtifactNumberLTE`, and `ArtifactArrayContains`
+- `WithTokenBudget` and `WithLatencyBudget` metric wrappers
+- `compare.CaseIDFromMetadata` helper for stable `case_id` result comparisons
+- Route planner example showing artifact-first agent workflow checks
+
+### Changed
+
+- `Case` now includes a private blank field, so external callers must use keyed
+  struct literals such as `eval.Case{Input: "..."}`
+
 ## [v0.3.0] - 2026-04-29
 
 ### Added

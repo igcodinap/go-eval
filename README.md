@@ -5,7 +5,8 @@
 `go-eval` brings LLM-as-judge metrics to the Go ecosystem.
 Core metrics (Faithfulness, Hallucination, AnswerRelevancy, ContextPrecision,
 GEval, Compound) and deterministic checks run inside standard `go test`, with
-benchmarks, `-parallel`, subtests, and CI integration working out of the box.
+structured artifacts, benchmarks, `-parallel`, subtests, and CI integration
+working out of the box.
 
 ## Why
 
@@ -93,6 +94,9 @@ Keep golden cases in JSON when you want eval data outside Go test code:
         "flow": "rag.answer",
         "tier": "critical",
         "dataset": "capitals/smoke-v1"
+      },
+      "artifacts": {
+        "state": {"status": "ready"}
       }
     }
   ]
@@ -150,6 +154,60 @@ GOEVAL=1 GOEVAL_TRACE=1 go test -v -run TestFaithfulness
 | `Regex`            | Output matches a regex                                 | binary            |
 | `JSONPath`         | JSON output value at configured path equals expected   | binary            |
 | `FieldCount`       | Minimum non-null top-level JSON field count            | config            |
+| `ArtifactExists`   | Named structured artifact exists                       | binary            |
+| `ArtifactJSONPath` | Artifact JSON value at configured path equals expected | binary            |
+| `ArtifactFieldCount` | Minimum non-null JSON object field count in artifact | config            |
+| `ArtifactNumberLTE` | Artifact JSON number is less than or equal to a max   | binary            |
+| `ArtifactArrayContains` | Artifact JSON array contains expected value       | binary            |
+
+## Artifact Checks
+
+`Case.Artifacts` stores named structured outputs alongside the text `Output`.
+Use it for route state, tool traces, intermediate planner state, budget data, or
+other JSON payloads that should be checked deterministically before an expensive
+judge metric runs.
+
+```go
+c := eval.Case{
+	Input:  "Plan a prepaid route from Universidad de Santiago to Valparaiso.",
+	Output: answer,
+	Artifacts: map[string]json.RawMessage{
+		"route":  json.RawMessage(`{"status":"ready","total_minutes":98,"stops":["Pajaritos"]}`),
+		"budget": json.RawMessage(`{"tokens":742}`),
+	},
+	Metadata: map[string]any{"case_id": "route-usach-valparaiso-card"},
+}
+
+r.Run(t, eval.ArtifactJSONPath{
+	Key: "route", Path: "status", Expected: "ready",
+}, c)
+r.Run(t, eval.ArtifactNumberLTE{
+	Key: "route", Path: "total_minutes", Max: 120,
+}, c)
+r.Run(t, eval.ArtifactArrayContains{
+	Key: "route", Path: "stops", Expected: "Pajaritos",
+}, c)
+```
+
+Artifact values are `json.RawMessage`: the core stays stdlib-only and does not
+interpret artifact names. Conventionally, use stable keys such as `trace`,
+`tools`, `route`, `state`, and `budget`.
+
+`ArtifactJSONPath.Expected` uses the same stringified comparison as `JSONPath`:
+strings compare as-is, booleans compare as `"true"` or `"false"`, numbers
+compare in JSON number form, and objects or arrays compare as compact JSON.
+
+`examples/route_planner/` shows the intended v0.4 pattern: catch incoherent
+workflow state first, then judge final prose only if it is still useful.
+
+Budget wrappers can fail an otherwise passing metric when token or latency
+limits are exceeded. They preserve the inner metric score and measurements, then
+set `Passed=false` when the budget is overrun:
+
+```go
+r.Run(t, eval.WithTokenBudget(1200, eval.Faithfulness{Threshold: 0.8}), c)
+r.Run(t, eval.WithLatencyBudget(2*time.Second, eval.AnswerRelevancy{}), c)
+```
 
 ## vs Python-first eval tools
 
@@ -160,14 +218,14 @@ GOEVAL=1 GOEVAL_TRACE=1 go test -v -run TestFaithfulness
 | Runs inside test framework  | pytest              | `go test` / `go test -bench` |
 | External platform required  | no                  | no                           |
 | Dependencies in core        | pydantic, pytest    | stdlib only                  |
-| Agent / conversation evals  | yes                 | planned                      |
+| Structured state artifacts  | yes                 | yes                          |
+| Agent / conversation evals  | yes                 | roadmap                      |
 | Dataset loaders             | YAML/JSON           | JSON in core, YAML deferred  |
 | HTML / JSON reports         | yes                 | via `go test -json`          |
 
-`go-eval` is intentionally smaller. v0.3 covers the common case:
-scoring RAG-style and deterministic evaluation cases in a CI-friendly way,
-loading JSON datasets, comparing JSONL result runs, and using local Ollama
-judges.
+`go-eval` is intentionally smaller. v0.4 keeps that shape: score RAG-style
+answers, check structured workflow artifacts, compare JSONL result runs, and use
+local judges without adopting a hosted eval platform.
 
 ## Benchmarks
 
@@ -217,6 +275,16 @@ Rows are matched by `test_name` and `metric` by default. Use
 `compare.Options.Identity` when a separate case id is stored in metadata.
 Reports include added, missing, improved, regressed, and unchanged entries, with
 score, pass/fail, token, latency, and Compound dimension deltas.
+
+For the conventional `Case.Metadata["case_id"]` key, use the helper:
+
+```go
+report := compare.CompareWithOptions(
+	baseline,
+	current,
+	compare.Options{Identity: compare.CaseIDFromMetadata("")},
+)
+```
 
 The CLI exposes the same comparison path for CI:
 
@@ -305,16 +373,34 @@ See `examples/openai_judge/` for a reference implementation.
 
 ## Status
 
-v0.3 - JSON datasets, result comparison, Ollama and OpenAI adapter modules,
-Compound, deterministic metrics, and opt-in result sinks are included. API may
-change before v1.0.
+v0.4 - JSON datasets, result comparison, Ollama and OpenAI adapter modules,
+Compound, deterministic metrics, structured artifacts, artifact metrics, budget
+wrappers, and opt-in result sinks are included. API may change before v1.0.
 
 ## Roadmap
 
-Planned scope:
-1. Conversation evaluation model (`ConversationCase`, `ConversationMetric`, `RunConversation`)
-2. YAML loader submodule (core remains stdlib-only)
-3. Additional adapters beyond Ollama (`Genkit`, `Anthropic`, `Gemini`)
+The agent-eval direction is staged. The core thesis is to stay Go-native,
+`go test` native, and local-first: deterministic state checks first,
+LLM-as-judge second, optional trace/platform integrations last.
+
+The current plan from AI-team review:
+
+1. v0.5: add conversation/trajectory primitives without forking the metric
+   pipeline. Prefer extending `Case` with turns/messages, or adapting
+   conversations into `Case`, over creating a parallel `ConversationMetric`
+   ecosystem. This keeps `Runner`, `Precheck`, sinks, budgets, comparison, and
+   reports composable.
+2. v0.5/v0.6: add `Turn`, `ToolCall`, trajectory match modes
+   (`strict`, `unordered`, `subset`, `superset`), `ToolCallAccuracy`,
+   `ToolCallF1`, `ForbiddenTool`, and `StepBudget`. Define duplicate tool-call,
+   argument matching, and tool-result semantics before locking the API.
+3. v0.6: add repeat/flakiness helpers and stronger reporting. This may move
+   earlier if the wrapper stays small and useful for existing metrics.
+4. v0.7: add optional trace import/export and OTel/platform bridges outside the
+   root package. Keep bridges export-first and separate from the stdlib-only
+   core until real users need a specific target.
+5. Future: YAML loader submodule and additional judge adapters beyond Ollama
+   (`Genkit`, `Anthropic`, `Gemini`), still outside the dependency-free core.
 
 ## License
 

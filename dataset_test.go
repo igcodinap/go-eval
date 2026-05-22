@@ -21,6 +21,9 @@ func TestDecodeCases_LoadsJSONDataset(t *testing.T) {
 					"flow": "rag.answer",
 					"tier": "critical",
 					"dataset": "capitals/smoke-v1"
+				},
+				"artifacts": {
+					"state": {"status": "ready"}
 				}
 			}
 		]
@@ -45,6 +48,13 @@ func TestDecodeCases_LoadsJSONDataset(t *testing.T) {
 		got.Metadata["tier"] != "critical" ||
 		got.Metadata["dataset"] != "capitals/smoke-v1" {
 		t.Fatalf("unexpected metadata: %+v", got.Metadata)
+	}
+	var state map[string]string
+	if err := json.Unmarshal(got.Artifacts["state"], &state); err != nil {
+		t.Fatalf("unexpected artifact JSON: %v", err)
+	}
+	if state["status"] != "ready" {
+		t.Fatalf("unexpected artifacts: %+v", got.Artifacts)
 	}
 }
 
@@ -203,6 +213,9 @@ func TestDataset_MetadataRoundTrip(t *testing.T) {
 						"tier":    "critical",
 						"dataset": "capitals/smoke-v1",
 					},
+					Artifacts: map[string]json.RawMessage{
+						"state": json.RawMessage(`{"status":"ready"}`),
+					},
 				},
 			},
 		},
@@ -225,5 +238,8 @@ func TestDataset_MetadataRoundTrip(t *testing.T) {
 		metadata["tier"] != "critical" ||
 		metadata["dataset"] != "capitals/smoke-v1" {
 		t.Fatalf("metadata did not round-trip: %+v", metadata)
+	}
+	if string(got.Cases[0].Case.Artifacts["state"]) != `{"status":"ready"}` {
+		t.Fatalf("artifacts did not round-trip: %+v", got.Cases[0].Case.Artifacts)
 	}
 }

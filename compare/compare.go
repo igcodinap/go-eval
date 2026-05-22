@@ -46,6 +46,9 @@ type Identity struct {
 // IdentityFunc builds a comparison identity for a result row.
 type IdentityFunc func(eval.RunResult) Identity
 
+// DefaultCaseIDMetadataKey is the conventional metadata key for stable case IDs.
+const DefaultCaseIDMetadataKey = "case_id"
+
 // Options configures comparison behavior.
 type Options struct {
 	// Identity overrides the default test-name and metric identity.
@@ -121,6 +124,27 @@ func DefaultIdentity(result eval.RunResult) Identity {
 	return Identity{
 		TestName: result.TestName,
 		Metric:   result.Metric,
+	}
+}
+
+// CaseIDFromMetadata builds an IdentityFunc that keys rows by metadata case ID.
+//
+// An empty key uses the conventional "case_id" metadata key. Non-string values
+// are formatted with fmt.Sprint so JSONL-decoded numeric IDs remain usable.
+func CaseIDFromMetadata(key string) IdentityFunc {
+	if key == "" {
+		key = DefaultCaseIDMetadataKey
+	}
+	return func(result eval.RunResult) Identity {
+		caseName := ""
+		if value, ok := result.Metadata[key]; ok && value != nil {
+			caseName = fmt.Sprint(value)
+		}
+		return Identity{
+			TestName: result.TestName,
+			CaseName: caseName,
+			Metric:   result.Metric,
+		}
 	}
 }
 
