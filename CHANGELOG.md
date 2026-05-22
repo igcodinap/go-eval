@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- v0.5 trajectory primitives: `Turn`, `ToolCall`, `Case.Turns`, and
+  `Case.ExpectedToolCalls`
+- JSON dataset support for optional `turns` and `expected_tool_calls` fields
+- v0.6 trajectory match modes: `MatchStrict`, `MatchUnordered`, `MatchSubset`,
+  and `MatchSuperset`
+- Trajectory metrics: `ToolCallAccuracy`, `ToolCallF1`, `ForbiddenTool`, and
+  `StepBudget`
+- `Repeat` and `RepeatN` for repeated metric runs and pass-rate aggregation
+- Single-run result summaries through `compare.Summarize`,
+  `compare.SummarizeFile`, and `goeval summarize`
+
 ## [v0.4.0] - 2026-05-22
 
 ### Added

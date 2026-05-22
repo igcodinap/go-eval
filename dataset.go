@@ -22,6 +22,8 @@ import (
 //	      "output": "Paris is the capital of France.",
 //	      "expected": "Paris",
 //	      "context": ["Paris is the capital of France."],
+//	      "turns": [{"role": "user", "content": "What is the capital of France?"}],
+//	      "expected_tool_calls": [{"name": "search", "arguments": {"query": "capital of France"}}],
 //	      "metadata": {"flow": "rag.answer", "tier": "critical", "dataset": "smoke/v1"},
 //	      "artifacts": {"state": {"status": "ready"}}
 //	    }
@@ -80,13 +82,15 @@ type NamedCase struct {
 // MarshalJSON encodes NamedCase using the flattened dataset case format.
 func (c NamedCase) MarshalJSON() ([]byte, error) {
 	return json.Marshal(namedCaseJSON{
-		Name:      c.Name,
-		Input:     c.Case.Input,
-		Output:    c.Case.Output,
-		Expected:  c.Case.Expected,
-		Context:   c.Case.Context,
-		Metadata:  c.Case.Metadata,
-		Artifacts: c.Case.Artifacts,
+		Name:              c.Name,
+		Input:             c.Case.Input,
+		Output:            c.Case.Output,
+		Expected:          c.Case.Expected,
+		Context:           c.Case.Context,
+		Turns:             c.Case.Turns,
+		ExpectedToolCalls: c.Case.ExpectedToolCalls,
+		Metadata:          c.Case.Metadata,
+		Artifacts:         c.Case.Artifacts,
 	})
 }
 
@@ -102,24 +106,28 @@ func (c *NamedCase) UnmarshalJSON(data []byte) error {
 	}
 	c.Name = raw.Name
 	c.Case = Case{
-		Input:     raw.Input,
-		Output:    raw.Output,
-		Expected:  raw.Expected,
-		Context:   raw.Context,
-		Metadata:  raw.Metadata,
-		Artifacts: raw.Artifacts,
+		Input:             raw.Input,
+		Output:            raw.Output,
+		Expected:          raw.Expected,
+		Context:           raw.Context,
+		Turns:             raw.Turns,
+		ExpectedToolCalls: raw.ExpectedToolCalls,
+		Metadata:          raw.Metadata,
+		Artifacts:         raw.Artifacts,
 	}
 	return nil
 }
 
 type namedCaseJSON struct {
-	Name      string                     `json:"name,omitempty"`
-	Input     string                     `json:"input,omitempty"`
-	Output    string                     `json:"output,omitempty"`
-	Expected  string                     `json:"expected,omitempty"`
-	Context   []string                   `json:"context,omitempty"`
-	Metadata  map[string]any             `json:"metadata,omitempty"`
-	Artifacts map[string]json.RawMessage `json:"artifacts,omitempty"`
+	Name              string                     `json:"name,omitempty"`
+	Input             string                     `json:"input,omitempty"`
+	Output            string                     `json:"output,omitempty"`
+	Expected          string                     `json:"expected,omitempty"`
+	Context           []string                   `json:"context,omitempty"`
+	Turns             []Turn                     `json:"turns,omitempty"`
+	ExpectedToolCalls []ToolCall                 `json:"expected_tool_calls,omitempty"`
+	Metadata          map[string]any             `json:"metadata,omitempty"`
+	Artifacts         map[string]json.RawMessage `json:"artifacts,omitempty"`
 }
 
 // LoadDataset reads a JSON dataset file.

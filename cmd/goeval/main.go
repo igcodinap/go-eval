@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 
 	eval "github.com/igcodinap/go-eval"
@@ -20,12 +21,14 @@ type goCommandFunc func(context.Context, []string, []string, io.Reader, io.Write
 const usage = `Usage:
   goeval test [go test args...]
   goeval compare <baseline.jsonl> <current.jsonl>
+  goeval summarize <results.jsonl>
   goeval version
 
 Commands:
-  test     Run go test with GOEVAL=1 set.
-  compare  Compare two go-eval JSONL result files.
-  version  Print the goeval CLI version.
+  test       Run go test with GOEVAL=1 set.
+  compare    Compare two go-eval JSONL result files.
+  summarize  Summarize one go-eval JSONL result file.
+  version    Print the goeval CLI version.
 `
 
 func main() {
@@ -52,6 +55,8 @@ func run(ctx context.Context, args []string, baseEnv []string, stdin io.Reader, 
 		return goCmd(ctx, goArgs, env, stdin, stdout, stderr)
 	case "compare":
 		return runCompare(args[1:], stdout, stderr)
+	case "summarize":
+		return runSummarize(args[1:], stdout, stderr)
 	case "version":
 		return runVersion(stdout)
 	default:
@@ -97,6 +102,22 @@ func runCompare(args []string, stdout io.Writer, stderr io.Writer) int {
 	return 0
 }
 
+func runSummarize(args []string, stdout io.Writer, stderr io.Writer) int {
+	if len(args) != 1 {
+		writef(stderr, "usage: goeval summarize <results.jsonl>\n")
+		return 2
+	}
+
+	summary, err := compare.SummarizeFile(args[0])
+	if err != nil {
+		writef(stderr, "summarize: %v\n", err)
+		return 1
+	}
+
+	printSummaryReport(stdout, summary)
+	return 0
+}
+
 func runVersion(stdout io.Writer) int {
 	writef(stdout, "goeval %s\n", version)
 	return 0
@@ -120,6 +141,39 @@ func printCompareReport(w io.Writer, report compare.Report) {
 			continue
 		}
 		printEntry(w, entry)
+	}
+}
+
+func printSummaryReport(w io.Writer, summary compare.ResultsSummary) {
+	writef(
+		w,
+		"Summary: total=%d passed=%d failed=%d\n",
+		summary.Total,
+		summary.Passed,
+		summary.Failed,
+	)
+
+	metrics := make([]string, 0, len(summary.ByMetric))
+	for metric := range summary.ByMetric {
+		metrics = append(metrics, metric)
+	}
+	sort.Strings(metrics)
+	for _, metric := range metrics {
+		s := summary.ByMetric[metric]
+		writef(
+			w,
+			"metric=%s\tcount=%d\tpassed=%d\tfailed=%d\tmean_score=%.3f\tstddev=%.3f\tmin_score=%.3f\tmax_score=%.3f\tmean_tokens=%.1f\tmean_latency_ns=%d\n",
+			metric,
+			s.Count,
+			s.Passed,
+			s.Failed,
+			s.MeanScore,
+			s.StdDev,
+			s.MinScore,
+			s.MaxScore,
+			s.MeanTokens,
+			int64(s.MeanLatency),
+		)
 	}
 }
 

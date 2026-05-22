@@ -17,6 +17,26 @@ func TestDecodeCases_LoadsJSONDataset(t *testing.T) {
 				"output": "Paris is the capital of France.",
 				"expected": "Paris",
 				"context": ["Paris is the capital of France."],
+				"turns": [
+					{
+						"role": "user",
+						"content": "What is the capital of France?"
+					},
+					{
+						"role": "assistant",
+						"tool_calls": [
+							{
+								"id": "call-1",
+								"name": "search",
+								"arguments": {"query": "capital of France"},
+								"result": "Paris is the capital of France."
+							}
+						]
+					}
+				],
+				"expected_tool_calls": [
+					{"name": "search", "arguments": {"query": "capital of France"}}
+				],
 				"metadata": {
 					"flow": "rag.answer",
 					"tier": "critical",
@@ -43,6 +63,22 @@ func TestDecodeCases_LoadsJSONDataset(t *testing.T) {
 	}
 	if len(got.Context) != 1 || got.Context[0] != "Paris is the capital of France." {
 		t.Fatalf("unexpected context: %+v", got.Context)
+	}
+	if len(got.Turns) != 2 || got.Turns[0].Role != RoleUser || got.Turns[0].Content != "What is the capital of France?" {
+		t.Fatalf("unexpected turns: %+v", got.Turns)
+	}
+	if len(got.Turns[1].ToolCalls) != 1 || got.Turns[1].ToolCalls[0].Name != "search" {
+		t.Fatalf("unexpected turn tool calls: %+v", got.Turns[1].ToolCalls)
+	}
+	var gotArgs map[string]string
+	if err := json.Unmarshal(got.Turns[1].ToolCalls[0].Arguments, &gotArgs); err != nil {
+		t.Fatalf("unexpected tool call arguments JSON: %v", err)
+	}
+	if gotArgs["query"] != "capital of France" {
+		t.Fatalf("unexpected tool call arguments: %+v", gotArgs)
+	}
+	if len(got.ExpectedToolCalls) != 1 || got.ExpectedToolCalls[0].Name != "search" {
+		t.Fatalf("unexpected expected tool calls: %+v", got.ExpectedToolCalls)
 	}
 	if got.Metadata["flow"] != "rag.answer" ||
 		got.Metadata["tier"] != "critical" ||
@@ -208,6 +244,29 @@ func TestDataset_MetadataRoundTrip(t *testing.T) {
 				Case: Case{
 					Input:    "What is the capital of France?",
 					Expected: "Paris",
+					Turns: []Turn{
+						{
+							Role:    RoleUser,
+							Content: "What is the capital of France?",
+						},
+						{
+							Role: RoleAssistant,
+							ToolCalls: []ToolCall{
+								{
+									ID:        "call-1",
+									Name:      "search",
+									Arguments: json.RawMessage(`{"query":"capital of France"}`),
+									Result:    "Paris is the capital of France.",
+								},
+							},
+						},
+					},
+					ExpectedToolCalls: []ToolCall{
+						{
+							Name:      "search",
+							Arguments: json.RawMessage(`{"query":"capital of France"}`),
+						},
+					},
 					Metadata: map[string]any{
 						"flow":    "rag.answer",
 						"tier":    "critical",
@@ -232,6 +291,13 @@ func TestDataset_MetadataRoundTrip(t *testing.T) {
 	}
 	if len(got.Cases) != 1 {
 		t.Fatalf("expected one case, got %d", len(got.Cases))
+	}
+	trajectory := got.Cases[0].Case
+	if len(trajectory.Turns) != 2 || trajectory.Turns[1].ToolCalls[0].ID != "call-1" {
+		t.Fatalf("turns did not round-trip: %+v", trajectory.Turns)
+	}
+	if len(trajectory.ExpectedToolCalls) != 1 || string(trajectory.ExpectedToolCalls[0].Arguments) != `{"query":"capital of France"}` {
+		t.Fatalf("expected tool calls did not round-trip: %+v", trajectory.ExpectedToolCalls)
 	}
 	metadata := got.Cases[0].Case.Metadata
 	if metadata["flow"] != "rag.answer" ||

@@ -4,9 +4,9 @@
 
 `go-eval` brings LLM-as-judge metrics to the Go ecosystem.
 Core metrics (Faithfulness, Hallucination, AnswerRelevancy, ContextPrecision,
-GEval, Compound) and deterministic checks run inside standard `go test`, with
-structured artifacts, benchmarks, `-parallel`, subtests, and CI integration
-working out of the box.
+GEval, Compound), deterministic trajectory checks, and repeatability helpers run
+inside standard `go test`, with structured artifacts, benchmarks, `-parallel`,
+subtests, and CI integration working out of the box.
 
 ## Why
 
@@ -90,6 +90,22 @@ Keep golden cases in JSON when you want eval data outside Go test code:
       "input": "What's the capital of France?",
       "expected": "Paris",
       "context": ["Paris is the capital of France."],
+      "turns": [
+        {"role": "user", "content": "What's the capital of France?"},
+        {
+          "role": "assistant",
+          "tool_calls": [
+            {
+              "name": "search",
+              "arguments": {"query": "capital of France"},
+              "result": "Paris is the capital of France."
+            }
+          ]
+        }
+      ],
+      "expected_tool_calls": [
+        {"name": "search", "arguments": {"query": "capital of France"}}
+      ],
       "metadata": {
         "flow": "rag.answer",
         "tier": "critical",
@@ -159,6 +175,11 @@ GOEVAL=1 GOEVAL_TRACE=1 go test -v -run TestFaithfulness
 | `ArtifactFieldCount` | Minimum non-null JSON object field count in artifact | config            |
 | `ArtifactNumberLTE` | Artifact JSON number is less than or equal to a max   | binary            |
 | `ArtifactArrayContains` | Artifact JSON array contains expected value       | binary            |
+| `ToolCallAccuracy` | Actual tool calls match expected calls by mode         | 1.0               |
+| `ToolCallF1`      | Precision/recall/F1 for expected tool calls             | 0.8               |
+| `ForbiddenTool`   | Disallowed tool names were not used                     | binary            |
+| `StepBudget`      | Flattened tool-call count stays within a max            | binary            |
+| `Repeat`          | Re-run a metric and aggregate pass rate/score variance  | pass rate 1.0     |
 
 ## Artifact Checks
 
@@ -209,6 +230,59 @@ r.Run(t, eval.WithTokenBudget(1200, eval.Faithfulness{Threshold: 0.8}), c)
 r.Run(t, eval.WithLatencyBudget(2*time.Second, eval.AnswerRelevancy{}), c)
 ```
 
+## Trajectory Checks
+
+Use `Case.Turns` and `Case.ExpectedToolCalls` for conversation and tool-use
+workflows without leaving the normal `Metric` pipeline:
+
+```go
+c := eval.Case{
+	Input:    "What's the capital of France?",
+	Output:   answer,
+	Expected: "Paris",
+	Turns: []eval.Turn{
+		{Role: eval.RoleUser, Content: "What's the capital of France?"},
+		{
+			Role: eval.RoleAssistant,
+			ToolCalls: []eval.ToolCall{
+				{
+					Name:      "search",
+					Arguments: json.RawMessage(`{"query":"capital of France"}`),
+					Result:    "Paris is the capital of France.",
+				},
+			},
+		},
+	},
+	ExpectedToolCalls: []eval.ToolCall{
+		{Name: "search", Arguments: json.RawMessage(`{"query":"capital of France"}`)},
+	},
+}
+
+r.Run(t, eval.ToolCallAccuracy{Mode: eval.MatchStrict, MatchArgs: true}, c)
+r.Run(t, eval.ToolCallF1{MatchArgs: true, Threshold: 0.8}, c)
+r.Run(t, eval.ForbiddenTool{Names: []string{"delete_user"}}, c)
+r.Run(t, eval.StepBudget{MaxSteps: 2}, c)
+```
+
+`ToolCallAccuracy` supports `MatchStrict`, `MatchUnordered`, `MatchSubset`, and
+`MatchSuperset`. Tool names match exactly. When `MatchArgs` is set, arguments
+are compared as normalized JSON; empty expected arguments are a wildcard. When
+`MatchResult` is set, expected non-empty `Result` values must match exactly;
+empty expected results are a wildcard. `StepBudget` counts flattened tool calls,
+not transcript turns.
+
+`Turn.Name`, `Turn.ToolCallID`, `ToolCall.ID`, and `ToolCall.Error` preserve
+provider transcript details for future checks and downstream reports. The
+deterministic metrics match against flattened `ToolCall` values rather than raw
+turn count or transcript shape.
+
+Use `Repeat` when a judge metric is nondeterministic enough to need a pass-rate
+guard:
+
+```go
+r.Run(t, eval.Repeat{Metric: eval.Faithfulness{Threshold: 0.8}, N: 3, PassRate: 2.0 / 3.0}, c)
+```
+
 ## vs Python-first eval tools
 
 | Feature                     | Python-first tools   | `go-eval`                    |
@@ -219,13 +293,14 @@ r.Run(t, eval.WithLatencyBudget(2*time.Second, eval.AnswerRelevancy{}), c)
 | External platform required  | no                  | no                           |
 | Dependencies in core        | pydantic, pytest    | stdlib only                  |
 | Structured state artifacts  | yes                 | yes                          |
-| Agent / conversation evals  | yes                 | roadmap                      |
+| Agent / conversation evals  | yes                 | typed turns + tool calls     |
 | Dataset loaders             | YAML/JSON           | JSON in core, YAML deferred  |
-| HTML / JSON reports         | yes                 | via `go test -json`          |
+| HTML / JSON reports         | yes                 | JSONL compare + summarize    |
 
-`go-eval` is intentionally smaller. v0.4 keeps that shape: score RAG-style
-answers, check structured workflow artifacts, compare JSONL result runs, and use
-local judges without adopting a hosted eval platform.
+`go-eval` is intentionally smaller. It scores RAG-style answers, checks
+structured workflow artifacts and tool trajectories, compares and summarizes
+JSONL result runs, and uses local judges without adopting a hosted eval
+platform.
 
 ## Benchmarks
 
@@ -290,9 +365,11 @@ The CLI exposes the same comparison path for CI:
 
 ```bash
 goeval compare old/results.jsonl new/results.jsonl
+goeval summarize current/results.jsonl
 ```
 
 `goeval compare` exits nonzero when rows regress or disappear.
+`goeval summarize` prints pass/fail and score aggregates for one result file.
 
 Use `WithCaseFilter` to run a selected slice of cases, for example a
 critical-only CI path:
@@ -373,9 +450,10 @@ See `examples/openai_judge/` for a reference implementation.
 
 ## Status
 
-v0.4 - JSON datasets, result comparison, Ollama and OpenAI adapter modules,
-Compound, deterministic metrics, structured artifacts, artifact metrics, budget
-wrappers, and opt-in result sinks are included. API may change before v1.0.
+v0.4 is tagged. Main now includes the v0.5/v0.6 trajectory work: typed
+conversation turns, tool-call expectations, deterministic trajectory metrics,
+repeat/flakiness helpers, JSONL comparison and summaries, structured artifacts,
+budget wrappers, and opt-in result sinks. API may change before v1.0.
 
 ## Roadmap
 
@@ -383,23 +461,18 @@ The agent-eval direction is staged. The core thesis is to stay Go-native,
 `go test` native, and local-first: deterministic state checks first,
 LLM-as-judge second, optional trace/platform integrations last.
 
-The current plan from AI-team review:
+The staged plan from AI-team review:
 
 1. v0.5: add conversation/trajectory primitives without forking the metric
-   pipeline. Prefer extending `Case` with turns/messages, or adapting
-   conversations into `Case`, over creating a parallel `ConversationMetric`
-   ecosystem. This keeps `Runner`, `Precheck`, sinks, budgets, comparison, and
-   reports composable.
-2. v0.5/v0.6: add `Turn`, `ToolCall`, trajectory match modes
-   (`strict`, `unordered`, `subset`, `superset`), `ToolCallAccuracy`,
-   `ToolCallF1`, `ForbiddenTool`, and `StepBudget`. Define duplicate tool-call,
-   argument matching, and tool-result semantics before locking the API.
-3. v0.6: add repeat/flakiness helpers and stronger reporting. This may move
-   earlier if the wrapper stays small and useful for existing metrics.
-4. v0.7: add optional trace import/export and OTel/platform bridges outside the
+   pipeline: `Turn`, `ToolCall`, `Case.Turns`, `Case.ExpectedToolCalls`, and
+   dataset support.
+2. v0.6: add trajectory match modes (`strict`, `unordered`, `subset`,
+   `superset`), `ToolCallAccuracy`, `ToolCallF1`, `ForbiddenTool`, `StepBudget`,
+   repeat/flakiness helpers, and stronger JSONL reporting.
+3. v0.7: add optional trace import/export and OTel/platform bridges outside the
    root package. Keep bridges export-first and separate from the stdlib-only
    core until real users need a specific target.
-5. Future: YAML loader submodule and additional judge adapters beyond Ollama
+4. Future: YAML loader submodule and additional judge adapters beyond Ollama
    (`Genkit`, `Anthropic`, `Gemini`), still outside the dependency-free core.
 
 ## License

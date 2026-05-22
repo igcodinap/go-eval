@@ -115,3 +115,53 @@ For LLM-judge metrics, "typically needed fields" are not hard-validated by the l
 - Use for: completeness gates on structured outputs.
 - Avoid for: validating field semantics; pair with `JSONPath` or `GEval`.
 - Anti-pattern: rewarding many fields when the contract requires only a few exact ones.
+
+## ToolCallAccuracy
+
+- Required fields: `Case.Turns`, `Case.ExpectedToolCalls`.
+- Score: fraction of expected/actual tool calls matched under `Mode`.
+- Default threshold: `1.0`.
+- Matching: names match exactly; `MatchArgs` compares normalized JSON and treats
+  missing expected arguments as a wildcard; `MatchResult` compares non-empty
+  expected result strings and treats empty expected results as a wildcard.
+- Use for: deterministic trajectory checks with strict, unordered, subset, or superset matching.
+- Avoid for: semantic quality of final prose; pair with `Faithfulness`, `AnswerRelevancy`, or `GEval`.
+- Anti-pattern: enabling `MatchArgs` with non-JSON arguments.
+
+## ToolCallF1
+
+- Required fields: `Case.Turns`, `Case.ExpectedToolCalls`.
+- Score: F1 over matched tool calls; precision, recall, and F1 are emitted as dimensions.
+- Default threshold: `0.8`.
+- Matching: same name, argument, result, wildcard, and duplicate-call semantics
+  as `ToolCallAccuracy`.
+- Use for: tool-use suites where extras and omissions should both be visible.
+- Avoid for: exact sequence assertions; use `ToolCallAccuracy{Mode: MatchStrict}`.
+- Anti-pattern: relying on F1 alone when a forbidden tool is high-severity.
+
+## ForbiddenTool
+
+- Required fields: `Case.Turns`, configured `Names`.
+- Score: `1` when none of the configured tool names appear, else `0`.
+- Default threshold: binary pass.
+- Use for: policy and safety gates on tool access.
+- Avoid for: allow-list behavior; use `ToolCallAccuracy` or a custom deterministic metric.
+- Anti-pattern: using display labels instead of stable tool names.
+
+## StepBudget
+
+- Required fields: `Case.Turns`, configured `MaxSteps`.
+- Score: `1` when within budget; otherwise `MaxSteps / actual_steps`.
+- Default threshold: binary pass.
+- Use for: cheap prechecks before expensive judge metrics.
+- Avoid for: counting all transcript messages; it intentionally counts tool calls only.
+- Anti-pattern: setting budgets so tight that legitimate retries always fail.
+
+## Repeat
+
+- Required fields: wrapped metric, `N >= 2`.
+- Score: mean score across repeated runs; pass/fail uses pass rate.
+- Default pass rate: `1.0`.
+- Use for: nondeterministic LLM judge runs and flakiness checks.
+- Avoid for: deterministic metrics unless you are testing wrapper behavior.
+- Anti-pattern: using repeats to hide unstable prompts instead of diagnosing them.

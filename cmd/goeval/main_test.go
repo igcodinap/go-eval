@@ -108,6 +108,33 @@ func TestRunCompareReportsImprovementAndSucceeds(t *testing.T) {
 	}
 }
 
+func TestRunSummarizeReportsMetrics(t *testing.T) {
+	path := writeResultFile(t,
+		`{"test_name":"TestEval/a","metric":"Faithfulness","score":1,"passed":true,"tokens":10,"latency_ns":100}`+"\n"+
+			`{"test_name":"TestEval/b","metric":"Faithfulness","score":0.5,"passed":false,"tokens":30,"latency_ns":300}`+"\n"+
+			`{"test_name":"TestEval/c","metric":"ToolCallF1","score":0.75,"passed":true}`+"\n",
+	)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(context.Background(), []string{"summarize", path}, nil, nil, &stdout, &stderr, nil)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr=%q", code, stderr.String())
+	}
+	out := stdout.String()
+	for _, want := range []string{
+		"Summary: total=3 passed=2 failed=1",
+		"metric=Faithfulness\tcount=2\tpassed=1\tfailed=1\tmean_score=0.750",
+		"mean_tokens=20.0\tmean_latency_ns=200",
+		"metric=ToolCallF1\tcount=1\tpassed=1\tfailed=0\tmean_score=0.750",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("stdout missing %q in:\n%s", want, out)
+		}
+	}
+}
+
 func TestRunVersion(t *testing.T) {
 	oldVersion := version
 	version = "test-version"
@@ -136,6 +163,7 @@ func TestRunUsageErrors(t *testing.T) {
 	}{
 		{name: "unknown command", args: []string{"wat"}, want: `unknown command "wat"`},
 		{name: "compare arity", args: []string{"compare", "old.jsonl"}, want: "usage: goeval compare"},
+		{name: "summarize arity", args: []string{"summarize"}, want: "usage: goeval summarize"},
 	}
 
 	for _, tt := range tests {
@@ -153,6 +181,17 @@ func TestRunUsageErrors(t *testing.T) {
 			}
 		})
 	}
+}
+
+func writeResultFile(t *testing.T, content string) string {
+	t.Helper()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "results.jsonl")
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile results: %v", err)
+	}
+	return path
 }
 
 func writeCompareFiles(t *testing.T, baseline string, current string) (string, string) {

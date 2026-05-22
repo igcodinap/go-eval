@@ -2,6 +2,7 @@ package docs_test
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	eval "github.com/igcodinap/go-eval"
@@ -88,6 +89,28 @@ func TestGettingStartedDeterministicMetrics(t *testing.T) {
 	r.Run(t, eval.FieldCount{MinFields: 2}, eval.Case{
 		Output: `{"answer":"Paris","confidence":0.98}`,
 	})
+	trajectoryCase := eval.Case{
+		Output: "Order 42 arrives tomorrow.",
+		Turns: []eval.Turn{
+			{Role: eval.RoleUser, Content: "Where is order 42?"},
+			{
+				Role: eval.RoleAssistant,
+				ToolCalls: []eval.ToolCall{
+					{
+						Name:      "orders.lookup",
+						Arguments: json.RawMessage(`{"order_id":"42"}`),
+						Result:    "delivery_date=tomorrow",
+					},
+				},
+			},
+		},
+		ExpectedToolCalls: []eval.ToolCall{
+			{Name: "orders.lookup", Arguments: json.RawMessage(`{"order_id":"42"}`)},
+		},
+	}
+	r.Run(t, eval.ToolCallAccuracy{Mode: eval.MatchStrict, MatchArgs: true}, trajectoryCase)
+	r.Run(t, eval.ForbiddenTool{Names: []string{"orders.refund"}}, trajectoryCase)
+	r.Run(t, eval.StepBudget{MaxSteps: 1}, trajectoryCase)
 	r.Run(t, eval.Precheck{
 		Pre: eval.Regex{Pattern: `^\s*\{`},
 		Main: eval.GEval{

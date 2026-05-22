@@ -3,7 +3,7 @@
 This guide starts with a local, deterministic eval you can copy into any Go
 project. Then it shows the same shape with an OpenAI-backed judge, RAG metrics,
 deterministic checks, `Compound`, `Precheck`, JSONL result output, and
-benchmarks.
+benchmarks, trajectory checks, and repeat/flakiness helpers.
 
 `go-eval` runs inside `go test`. Eval runs are opt-in: `Runner.Run` and
 `eval.Bench` skip unless `GOEVAL=1` is set. This keeps normal local runs and CI
@@ -224,6 +224,55 @@ r.Run(t, eval.FieldCount{MinFields: 2}, eval.Case{
 `Contains`, `Regex`, `JSONPath`, and `FieldCount` ignore the judge argument, but
 they still benefit from `Runner` behavior: the same `GOEVAL` gate, case filters,
 result sinks, and test assertions.
+
+## Check Tool Trajectories
+
+Use `Turns` and `ExpectedToolCalls` when you want to evaluate a conversation or
+tool-use path without leaving the normal `Case` and `Runner.Run` API.
+
+```go
+c := eval.Case{
+	Input:  "Where is order 42?",
+	Output: "Order 42 arrives tomorrow.",
+	Turns: []eval.Turn{
+		{Role: eval.RoleUser, Content: "Where is order 42?"},
+		{
+			Role: eval.RoleAssistant,
+			ToolCalls: []eval.ToolCall{
+				{
+					Name:      "orders.lookup",
+					Arguments: json.RawMessage(`{"order_id":"42"}`),
+					Result:    "delivery_date=tomorrow",
+				},
+			},
+		},
+	},
+	ExpectedToolCalls: []eval.ToolCall{
+		{Name: "orders.lookup", Arguments: json.RawMessage(`{"order_id":"42"}`)},
+	},
+}
+
+r.Run(t, eval.ToolCallAccuracy{Mode: eval.MatchStrict, MatchArgs: true}, c)
+r.Run(t, eval.ForbiddenTool{Names: []string{"orders.refund"}}, c)
+r.Run(t, eval.StepBudget{MaxSteps: 1}, c)
+```
+
+`ToolCallAccuracy` supports strict, unordered, subset, and superset matching.
+Set `MatchArgs` for normalized JSON argument matching and `MatchResult` when
+expected non-empty tool results must match exactly. `ToolCallF1` exposes
+precision, recall, and F1 as dimensions. `StepBudget` counts flattened tool
+calls, not all transcript turns.
+
+Wrap noisy judge metrics with `Repeat` when pass rate matters more than a single
+sample:
+
+```go
+r.Run(t, eval.Repeat{
+	Metric:   eval.Faithfulness{Threshold: 0.8},
+	N:        3,
+	PassRate: 2.0 / 3.0,
+}, c)
+```
 
 ## Score Multiple Dimensions
 

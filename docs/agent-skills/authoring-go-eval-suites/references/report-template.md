@@ -18,6 +18,11 @@ Per metric:
 ## Dimensions (Compound only)
   <dimension>:  pass=<n>/<n>, mean=<n>, threshold=<n>
 
+## Trajectory
+Tool-call metrics: <pass>/<total>
+Tool-call names:   <set>
+Repeat pass rate:  <metric>=<n>/<n> [when Repeat is used]
+
 ## Budget
 Total tokens:   <n> (prompt=<n>, completion=<n>)
 Avg/case:       <n>
@@ -41,6 +46,7 @@ Newly passing:  <list>
 
 ## Coverage
 Agent flows declared in Case.Metadata["flow"]:  <set>
+Trajectory cases with Case.Turns:               <n>
 Flows found in agent code, best effort:         <set>
 Uncovered flows:                                <list>
 
@@ -50,7 +56,8 @@ Uncovered flows:                                <list>
 
 ## Data Sources
 
-- Scores, dimensions, latency, tokens, metadata: `results.jsonl` from `GOEVAL_RESULTS_DIR`.
+- Scores, dimensions, trajectory summaries, latency, tokens, metadata:
+  `results.jsonl` from `GOEVAL_RESULTS_DIR`.
 - Commit: `git rev-parse --short HEAD`.
 - Prior run: previous JSONL/report at the requested `--save` path, when present.
 - Coverage: declared `Case.Metadata["flow"]` values plus best-effort source scan for agent/tool/retrieval flow names.
