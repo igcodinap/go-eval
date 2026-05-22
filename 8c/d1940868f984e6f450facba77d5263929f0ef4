@@ -1,0 +1,61 @@
+artifact_test.go
+  s_c778e8729a4459::t_d9c9c977bcb13a 1-36,76-83,119-184,205-314
+  s_c778e8729a4459::t_faa3828a2df70d 37-75,84-118,185-204
+budget.go
+  s_c778e8729a4459::t_006ded8d29f58c 106-112
+  s_c778e8729a4459::t_01d028ec2f7b07 1-9,13-18,21-52,57-62,65-105
+  s_c778e8729a4459::t_7cbc05f07ded1a 10-12,19-20,53-56,63-64
+README.md
+  s_c778e8729a4459::t_99fe8319deffcb 8-9,97-99,157-195,200-203,206-210
+  s_c778e8729a4459::t_9b4ab612fca3ac 196-199,204-205
+  s_c778e8729a4459::t_d3786107cbac19 221-222,226-228,279-287
+  s_c778e8729a4459::t_7c7bdf582edcfd 376-378,382-403
+artifact.go
+  s_c778e8729a4459::t_611c778567c8ea 78-79,172-173
+  s_c778e8729a4459::t_e5fa8bcb17f771 1-37,42-75,80-171,174-277
+  s_c778e8729a4459::t_91a6079b19f57b 38-41,76-77
+examples/route_planner/planner_test.go
+  s_c778e8729a4459::t_851af8c6b540c1 1-40
+compare/compare.go
+  s_c778e8729a4459::t_6b535fd45519af 49-51,130-147
+budget_test.go
+  s_c778e8729a4459::t_0f148880d397da 5,63-77,90-96,98-105,142-172
+  s_c778e8729a4459::t_177bc011744f47 1-4,6-62,78-89,97,106-141,173-183
+case_test.go
+  s_c778e8729a4459::t_b57587ae1f2930 3-6,15-17,29-30
+dataset_test.go
+  s_c778e8729a4459::t_82e0a93002c1da 52-56
+  s_c778e8729a4459::t_f95c3351180c6c 24-26,57-58,216-218,242-243
+examples/route_planner/go.mod
+  s_c778e8729a4459::t_5de9d31c3ea388 1-7
+case.go
+  s_c778e8729a4459::t_c7de0adcf95f65 5-6,12-13,15-21
+compare/compare_test.go
+  s_c778e8729a4459::t_e0fe22008b7dd3 133,146-156
+examples/route_planner/planner.go
+  s_c778e8729a4459::t_3e0587c1f28471 1-80
+CHANGELOG.md
+  s_c778e8729a4459::t_07f9903b41d22d 10-17
+  s_c778e8729a4459::t_55b8d5ab26200a 18-22
+examples/route_planner/README.md
+  s_c778e8729a4459::t_52e6ae9d416e9f 1-16
+dataset.go
+  s_c778e8729a4459::t_7c684629a088bb 83-88,105-109,121
+  s_c778e8729a4459::t_362d711c4c1470 25-26,89,110,116-120,122
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.11",
+  "base_commit_sha": "8cd1940868f984e6f450facba77d5263929f0ef4",
+  "prompts": {},
+  "sessions": {
+    "s_c778e8729a4459": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e4d06-68ec-7532-bb57-2c20b6bb87c3",
+        "model": "gpt-5.5"
+      },
+      "human_author": "igcodinap <igcodinap@users.noreply.github.com>"
+    }
+  }
+}
