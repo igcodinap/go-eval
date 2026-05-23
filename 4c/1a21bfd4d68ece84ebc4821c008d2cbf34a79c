@@ -1,0 +1,68 @@
+artifact.go
+  s_acc1fe3864e21b::t_f7f998668570c1 212-225,228-254
+  s_acc1fe3864e21b::t_7a6d4103370596 226-227
+docs/agent-skills/authoring-go-eval-suites/references/metrics-reference.md
+  s_acc1fe3864e21b::t_9e27f3d64bc78f 119-130,154-162,189-199
+CHANGELOG.md
+  s_acc1fe3864e21b::t_f79abf02429c38 10-19
+docs/agent-skills/authoring-go-eval-suites/SKILL.md
+  s_acc1fe3864e21b::t_a48cb4e028104c 45-47,58-63,77-78
+scenario_test.go
+  s_acc1fe3864e21b::t_7ff432715736b5 1-181,186-199,205-272,274-362,367-373
+  s_acc1fe3864e21b::t_cc54895b0d1c0a 182-185,200-204,363-366
+  s_acc1fe3864e21b::t_ebcb98e49cfab4 273
+clone.go
+  s_acc1fe3864e21b::t_39bcd9cc5de6bb 71-76
+  s_acc1fe3864e21b::t_715cd0bdd347a8 83-98
+  s_acc1fe3864e21b::t_2b1b614ce3aecf 1-70,77-82,99-117
+eval.go
+  s_acc1fe3864e21b::t_240a832cfce025 22,114-117,122-123,125
+result_sink_test.go
+  s_acc1fe3864e21b::t_f551673e6bc003 327-328,330-335,363,365-371
+  s_acc1fe3864e21b::t_aa5f82d2894dfb 314-326,329,336-362,364,372-378
+tool_registry.go
+  s_acc1fe3864e21b::t_5a78db83a27bad 1-52
+README.md
+  s_acc1fe3864e21b::t_f27fd25a398090 178,181,213-215,268,292-346,394-407,528-530,549-554
+required_tools_test.go
+  s_acc1fe3864e21b::t_435bd5af9986e7 1-43
+docs/getting-started.md
+  s_acc1fe3864e21b::t_6f53d377c08fbb 330-339
+redaction.go
+  s_acc1fe3864e21b::t_ebf9950f4d36ae 109-128
+  s_acc1fe3864e21b::t_fe002d15789a64 90
+  s_acc1fe3864e21b::t_f45da50bee858e 97-102,107-108,129-132,137-142,144
+  s_acc1fe3864e21b::t_2e9196b9b2ca6d 42
+  s_acc1fe3864e21b::t_06f8c70be291a1 1-41,43-89,91-96,103-106,133-136,143,145-156
+required_tools.go
+  s_acc1fe3864e21b::t_4d5f56a19366ce 1-51
+tool_registry_test.go
+  s_acc1fe3864e21b::t_18c4f9a091525a 1-15,19-42
+  s_acc1fe3864e21b::t_ebcb98e49cfab4 16-18
+artifact_test.go
+  s_acc1fe3864e21b::t_6e678910e382a9 280-340,342-344,346-361
+  s_acc1fe3864e21b::t_984cd63deef484 341,345
+examples/agent_scenario/scenario_test.go
+  s_acc1fe3864e21b::t_a3fa67f8994a7e 1-95
+scenario.go
+  s_acc1fe3864e21b::t_3b47aa1dd39301 279-282
+  s_acc1fe3864e21b::t_81fad907f4986d 206,221
+  s_acc1fe3864e21b::t_d4ef40b3801620 265-269,271,283-286
+  s_acc1fe3864e21b::t_8005ed030d1516 1-205,207-220,222-264,270,272-278,287-404
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.0",
+  "base_commit_sha": "4c1a21bfd4d68ece84ebc4821c008d2cbf34a79c",
+  "prompts": {},
+  "sessions": {
+    "s_acc1fe3864e21b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e5224-7cd6-74a3-a238-64541274ae29",
+        "model": "gpt-5.5"
+      },
+      "human_author": "igcodinap <igcodinap@users.noreply.github.com>"
+    }
+  }
+}
