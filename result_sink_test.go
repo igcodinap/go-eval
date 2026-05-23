@@ -311,3 +311,68 @@ func TestResultSinkWithContextIgnored(t *testing.T) {
 		t.Fatalf("unexpected RunResult values: %+v", rr)
 	}
 }
+
+func TestRunner_RedactsSinkResult(t *testing.T) {
+	t.Setenv(EnvVar, "1")
+
+	sink := &recordingSink{}
+	r := NewRunner(
+		&MockJudge{},
+		WithResultSink(sink),
+		WithRedactors(UUIDRedactor(), FieldRedactor("trip_plan_id")),
+	)
+	originalMetadata := map[string]any{
+		"trip_plan_id": "trip-123",
+		"nested": map[string]any{
+			"trace":        "id 550e8400-e29b-41d4-a716-446655440000",
+			"trip_plan_id": "nested-trip",
+		},
+		"items": []map[string]any{
+			{
+				"trace":        "id 550e8400-e29b-41d4-a716-446655440000",
+				"trip_plan_id": "list-trip",
+			},
+		},
+	}
+	originalReason := "trace 550e8400-e29b-41d4-a716-446655440000"
+	got := r.Run(t, scriptedMetric{
+		name: "X",
+		result: Result{
+			Score:  1,
+			Passed: true,
+			Metric: "X",
+			Reason: originalReason,
+			Dimensions: []DimensionResult{
+				{Name: "d", Score: 1, Passed: true, Reason: originalReason},
+			},
+			Metadata: originalMetadata,
+		},
+	}, Case{})
+
+	written := sink.last()
+	if written.Reason != "trace [REDACTED_UUID]" {
+		t.Fatalf("reason was not redacted: %q", written.Reason)
+	}
+	if written.Dimensions[0].Reason != "trace [REDACTED_UUID]" {
+		t.Fatalf("dimension reason was not redacted: %+v", written.Dimensions[0])
+	}
+	if written.Metadata["trip_plan_id"] != "[REDACTED]" {
+		t.Fatalf("field was not redacted: %+v", written.Metadata)
+	}
+	nested, ok := written.Metadata["nested"].(map[string]any)
+	if !ok || nested["trace"] != "id [REDACTED_UUID]" || nested["trip_plan_id"] != "[REDACTED]" {
+		t.Fatalf("nested metadata was not redacted: %+v", written.Metadata)
+	}
+	items, ok := written.Metadata["items"].([]map[string]any)
+	if !ok ||
+		len(items) != 1 ||
+		items[0]["trace"] != "id [REDACTED_UUID]" ||
+		items[0]["trip_plan_id"] != "[REDACTED]" {
+		t.Fatalf("metadata list was not redacted: %+v", written.Metadata)
+	}
+	if got.Reason != originalReason ||
+		got.Metadata["trip_plan_id"] != "trip-123" ||
+		originalMetadata["trip_plan_id"] != "trip-123" {
+		t.Fatalf("redaction mutated original data: got=%+v original=%+v", got, originalMetadata)
+	}
+}

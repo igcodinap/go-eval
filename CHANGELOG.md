@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Agent Scenario Contracts: `Scenario`, `Step`, `StepRequest`, `StepFunc`,
+  `StepResult`, `ScenarioResult`, and `Runner.RunScenario`
+- Scenario-scoped `ToolRegistry` with `NewToolRegistry` validation
+- `RequiredTools` trajectory metric and `ArtifactArrayMinLen` artifact metric
+- Result sink redaction with `WithRedactors`, `UUIDRedactor`, and
+  `FieldRedactor`
+- Agent scenario example covering multi-step route planning contracts
+
 ## [v0.6.0] - 2026-05-22
 
 ### Added

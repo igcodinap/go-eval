@@ -209,6 +209,49 @@ func (m ArtifactArrayContains) Score(ctx context.Context, _ Judge, c Case) (Resu
 	), nil
 }
 
+// ArtifactArrayMinLen checks whether an array artifact value has at least MinLen items.
+type ArtifactArrayMinLen struct {
+	Key    string
+	Path   string
+	MinLen int
+}
+
+// Name implements Metric.
+func (m ArtifactArrayMinLen) Name() string { return "ArtifactArrayMinLen" }
+
+// Score implements Metric.
+func (m ArtifactArrayMinLen) Score(ctx context.Context, _ Judge, c Case) (Result, error) {
+	_ = ctx
+
+	if m.MinLen <= 0 {
+		return failedArtifactResult(m.Name(), fmt.Sprintf("MinLen must be >= 1, got %d", m.MinLen)), nil
+	}
+
+	value, ok, reason := artifactPathValue(c, m.Key, m.Path)
+	if !ok {
+		return failedArtifactResult(m.Name(), reason), nil
+	}
+
+	items, ok := value.([]any)
+	if !ok {
+		return failedArtifactResult(m.Name(), fmt.Sprintf("artifact %q path %q is not a JSON array", m.Key, m.Path)), nil
+	}
+	if len(items) >= m.MinLen {
+		return Result{
+			Score:  1.0,
+			Passed: true,
+			Metric: m.Name(),
+			Reason: fmt.Sprintf("artifact %q path %q array length %d meets minimum %d", m.Key, m.Path, len(items), m.MinLen),
+		}, nil
+	}
+	return Result{
+		Score:  safeRatio(len(items), m.MinLen),
+		Passed: false,
+		Metric: m.Name(),
+		Reason: fmt.Sprintf("artifact %q path %q array length %d below minimum %d", m.Key, m.Path, len(items), m.MinLen),
+	}, nil
+}
+
 func artifactPathValue(c Case, key string, path string) (any, bool, string) {
 	payload, ok, reason := artifactValue(c, key)
 	if !ok {

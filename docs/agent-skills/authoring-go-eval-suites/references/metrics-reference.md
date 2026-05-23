@@ -116,6 +116,18 @@ For LLM-judge metrics, "typically needed fields" are not hard-validated by the l
 - Avoid for: validating field semantics; pair with `JSONPath` or `GEval`.
 - Anti-pattern: rewarding many fields when the contract requires only a few exact ones.
 
+## Artifact Checks
+
+- Required fields: `Case.Artifacts`, configured artifact key, and any configured JSON path.
+- Score: deterministic binary pass/fail, except field count and array length checks can report partial ratios.
+- Metrics: `ArtifactExists`, `ArtifactJSONPath`, `ArtifactFieldCount`,
+  `ArtifactNumberLTE`, `ArtifactArrayContains`, `ArtifactArrayMinLen`.
+- Use for: agent state, route plans, planner outputs, budgets, and other
+  structured artifacts that should be checked before judge-backed metrics.
+- Avoid for: semantic quality of final prose; pair with `GEval` or `Compound`.
+- Anti-pattern: checking only that an artifact exists when the state contract
+  requires fields such as `status`, `success`, or a minimum number of stops.
+
 ## ToolCallAccuracy
 
 - Required fields: `Case.Turns`, `Case.ExpectedToolCalls`.
@@ -138,6 +150,15 @@ For LLM-judge metrics, "typically needed fields" are not hard-validated by the l
 - Use for: tool-use suites where extras and omissions should both be visible.
 - Avoid for: exact sequence assertions; use `ToolCallAccuracy{Mode: MatchStrict}`.
 - Anti-pattern: relying on F1 alone when a forbidden tool is high-severity.
+
+## RequiredTools
+
+- Required fields: `Case.Turns`, configured `Names`.
+- Score: `1` when every configured tool name appears at least once, else `0`.
+- Default threshold: binary pass.
+- Use for: must-call behavior in tool-use or scenario steps.
+- Avoid for: validating order or arguments; use `ToolCallAccuracy` when those matter.
+- Anti-pattern: checking provider display names instead of stable tool names.
 
 ## ForbiddenTool
 
@@ -165,3 +186,14 @@ For LLM-judge metrics, "typically needed fields" are not hard-validated by the l
 - Use for: nondeterministic LLM judge runs and flakiness checks.
 - Avoid for: deterministic metrics unless you are testing wrapper behavior.
 - Anti-pattern: using repeats to hide unstable prompts instead of diagnosing them.
+
+## Scenario Contracts
+
+- Required fields: `Scenario.Name`, `Scenario.Driver`, and ordered `Steps`.
+- Score: `ScenarioResult.Passed` is true only when all step contract/check
+  results pass after any `ExpectFail` inversion.
+- Use for: multi-turn agent flows with step-specific required/forbidden tools,
+  tool-call budgets, accumulated artifacts, and expected negative cases.
+- Avoid for: single-turn cases where plain `Runner.Run` with a `Case` is clearer.
+- Anti-pattern: putting app orchestration into custom metrics instead of using
+  the scenario driver to collect turns and artifacts.

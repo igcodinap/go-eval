@@ -175,8 +175,10 @@ GOEVAL=1 GOEVAL_TRACE=1 go test -v -run TestFaithfulness
 | `ArtifactFieldCount` | Minimum non-null JSON object field count in artifact | config            |
 | `ArtifactNumberLTE` | Artifact JSON number is less than or equal to a max   | binary            |
 | `ArtifactArrayContains` | Artifact JSON array contains expected value       | binary            |
+| `ArtifactArrayMinLen` | Artifact JSON array has a minimum length           | binary            |
 | `ToolCallAccuracy` | Actual tool calls match expected calls by mode         | 1.0               |
 | `ToolCallF1`      | Precision/recall/F1 for expected tool calls             | 0.8               |
+| `RequiredTools`   | Required tool names were used                          | binary            |
 | `ForbiddenTool`   | Disallowed tool names were not used                     | binary            |
 | `StepBudget`      | Flattened tool-call count stays within a max            | binary            |
 | `Repeat`          | Re-run a metric and aggregate pass rate/score variance  | pass rate 1.0     |
@@ -207,6 +209,9 @@ r.Run(t, eval.ArtifactNumberLTE{
 }, c)
 r.Run(t, eval.ArtifactArrayContains{
 	Key: "route", Path: "stops", Expected: "Pajaritos",
+}, c)
+r.Run(t, eval.ArtifactArrayMinLen{
+	Key: "route", Path: "stops", MinLen: 2,
 }, c)
 ```
 
@@ -260,6 +265,7 @@ c := eval.Case{
 
 r.Run(t, eval.ToolCallAccuracy{Mode: eval.MatchStrict, MatchArgs: true}, c)
 r.Run(t, eval.ToolCallF1{MatchArgs: true, Threshold: 0.8}, c)
+r.Run(t, eval.RequiredTools{Names: []string{"search"}}, c)
 r.Run(t, eval.ForbiddenTool{Names: []string{"delete_user"}}, c)
 r.Run(t, eval.StepBudget{MaxSteps: 2}, c)
 ```
@@ -282,6 +288,61 @@ guard:
 ```go
 r.Run(t, eval.Repeat{Metric: eval.Faithfulness{Threshold: 0.8}, N: 3, PassRate: 2.0 / 3.0}, c)
 ```
+
+## Agent Scenarios
+
+Use `RunScenario` for ordered multi-turn agent flows where each step has its
+own tool and artifact contract. The scenario driver is app-owned: `go-eval`
+passes accumulated history and artifacts into each step, and the driver returns
+only the new turns and artifacts observed for that step.
+
+```go
+r := eval.NewRunner(
+	judge,
+	eval.WithResultSink(eval.DefaultResultSink()),
+	eval.WithRedactors(eval.UUIDRedactor(), eval.FieldRedactor("trip_plan_id")),
+)
+
+result := r.RunScenario(t, eval.Scenario{
+	Name: "planning_to_route_ready",
+	Tier: "critical",
+	Tools: eval.NewToolRegistry("plan_route", "select_map_items"),
+	Driver: func(ctx context.Context, req eval.StepRequest) (eval.StepResult, error) {
+		return runAgentStep(ctx, req.Step.Input, req.History, req.Artifacts)
+	},
+	Steps: []eval.Step{
+		{
+			Name:           "greeting",
+			Input:          "Hola",
+			ForbiddenTools: []string{"plan_route", "select_map_items"},
+			MaxToolCalls:   1,
+		},
+		{
+			Name:          "ready_route_request",
+			Input:         "Propón la ruta",
+			RequiredTools: []string{"plan_route"},
+			Checks: []eval.Metric{
+				eval.ArtifactJSONPath{Key: "trip_plan", Path: "status", Expected: "ready"},
+				eval.ArtifactJSONPath{Key: "route", Path: "success", Expected: "true"},
+				eval.ArtifactArrayMinLen{Key: "route", Path: "stops", MinLen: 2},
+			},
+		},
+	},
+})
+if !result.Passed {
+	t.Fatalf("scenario failed")
+}
+```
+
+`Scenario.Tools` is optional. When set, required, forbidden, and observed tool
+names are checked exactly and case-sensitively against the registry. Contract
+and metric failures do not stop later steps, so a failing scenario still writes
+diagnostic JSONL rows for the remaining steps. Driver errors and metric
+execution errors are fatal.
+
+Set `Step.ExpectFail` for negative cases where a contract or check should fail,
+for example an off-topic redirect that must not satisfy a boundary-respect
+contract.
 
 ## vs Python-first eval tools
 
@@ -329,6 +390,20 @@ Configure a sink to persist one JSON object per metric run:
 ```go
 r := eval.NewRunner(judge, eval.WithResultSink(eval.DefaultResultSink()))
 ```
+
+Use `WithRedactors` to scrub result data before JSONL writes:
+
+```go
+r := eval.NewRunner(
+	judge,
+	eval.WithResultSink(eval.DefaultResultSink()),
+	eval.WithRedactors(eval.UUIDRedactor(), eval.FieldRedactor("trip_plan_id")),
+)
+```
+
+Redactors apply to result reasons, Compound dimension reasons, and recursive
+string metadata values. They do not affect returned `Result` values, raw
+artifacts, or `GOEVAL_TRACE` logs.
 
 When `GOEVAL_RESULTS_DIR` is set, `DefaultResultSink` writes
 `results.jsonl` in that directory. Each row includes `timestamp`, `test_name`,
@@ -450,7 +525,9 @@ See `examples/openai_judge/` for a reference implementation.
 
 ## Status
 
-v0.6 includes the v0.5/v0.6 trajectory work: typed conversation turns,
+v0.7 adds Agent Scenario Contracts, scenario-scoped tool registries, required
+tool checks, artifact array length checks, and result redaction before JSONL
+writes. Earlier v0.5/v0.6 trajectory work includes typed conversation turns,
 tool-call expectations, deterministic trajectory metrics, repeat/flakiness
 helpers, JSONL comparison and summaries, structured artifacts, budget wrappers,
 and opt-in result sinks. API may change before v1.0.
@@ -469,11 +546,12 @@ The staged plan from AI-team review:
 2. v0.6: add trajectory match modes (`strict`, `unordered`, `subset`,
    `superset`), `ToolCallAccuracy`, `ToolCallF1`, `ForbiddenTool`, `StepBudget`,
    repeat/flakiness helpers, and stronger JSONL reporting.
-3. v0.7: add optional trace import/export and OTel/platform bridges outside the
-   root package. Keep bridges export-first and separate from the stdlib-only
-   core until real users need a specific target.
-4. Future: YAML loader submodule and additional judge adapters beyond Ollama
-   (`Genkit`, `Anthropic`, `Gemini`), still outside the dependency-free core.
+3. v0.7: add `Scenario` / `Step` contracts, `Runner.RunScenario`, scenario
+   tool registries, expected-failure steps, deeper artifact checks, and sink
+   redaction before JSONL writes.
+4. Future: optional trace import/export, OTel/platform bridges, YAML loader
+   submodule, and additional judge adapters beyond Ollama (`Genkit`,
+   `Anthropic`, `Gemini`), still outside the dependency-free core.
 
 ## License
 

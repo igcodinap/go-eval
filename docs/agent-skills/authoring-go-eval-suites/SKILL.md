@@ -42,6 +42,9 @@ Do not use it to implement the agent flow itself, benchmark non-AI code, or chan
 | Custom rubric | `GEval` |
 | Several rubric dimensions in one judge call | `Compound` |
 | Cheap format or field checks | `Contains`, `Regex`, `JSONPath`, `FieldCount` |
+| Structured artifact state | `ArtifactExists`, `ArtifactJSONPath`, `ArtifactArrayMinLen` |
+| Tool trajectory contracts | `RequiredTools`, `ForbiddenTool`, `StepBudget`, `ToolCallAccuracy`, `ToolCallF1` |
+| Ordered multi-turn agent flows | `Runner.RunScenario` with `Scenario` and `Step` contracts |
 | Expensive judge only after cheap guard | `Precheck` |
 
 Read `references/metrics-reference.md` when authoring or diagnosing a specific metric.
@@ -52,11 +55,12 @@ Read `references/metrics-reference.md` when authoring or diagnosing a specific m
 2. Use table-driven subtests with `t.Parallel()` only if the judge is concurrency-safe.
 3. Keep metrics stateless: value types with read-only config during `Score`.
 4. Pick the smallest metric set that catches the failure mode.
-5. Set thresholds with a short reason; do not copy values blindly.
-6. Wire `eval.NewRunner(judge, eval.WithResultSink(eval.DefaultResultSink()))`; `Runner` fills empty `Result.Metric` and zero `Result.Latency`.
-7. Start from `assets/templates/` when a concrete suite shape is useful.
-8. Keep evals in `_test.go`; preserve `GOEVAL` opt-in behavior for normal suites. If setup creates an external judge before `Runner.Run`, skip early when `os.Getenv(eval.EnvVar) == ""`. If a unit test must force an env gate, use `t.Setenv(...)`.
-9. Use `Runner` assertions when possible; custom wrappers should use `tb.Errorf` for low scores and `tb.Fatalf` for judge or internal errors.
+5. Use `RunScenario` for multi-turn agent flows where step order, tool policy, accumulated artifacts, or expected failures matter.
+6. Set thresholds with a short reason; do not copy values blindly.
+7. Wire `eval.NewRunner(judge, eval.WithResultSink(eval.DefaultResultSink()))`; add `WithRedactors` before writing shared JSONL when IDs or sensitive metadata may appear.
+8. Start from `assets/templates/` when a concrete suite shape is useful.
+9. Keep evals in `_test.go`; preserve `GOEVAL` opt-in behavior for normal suites. If setup creates an external judge before `Runner.Run`, skip early when `os.Getenv(eval.EnvVar) == ""`. If a unit test must force an env gate, use `t.Setenv(...)`.
+10. Use `Runner` assertions when possible; custom wrappers should use `tb.Errorf` for low scores and `tb.Fatalf` for judge or internal errors.
 
 ## Run
 
@@ -69,6 +73,9 @@ Read `references/metrics-reference.md` when authoring or diagnosing a specific m
 | Bench evals | `GOEVAL=1 go test -bench=. -count=5` |
 
 Use `WithCaseFilter` for tiered runs, usually `tier == "critical"` in fast CI and all tiers in scheduled runs.
+
+For scenario suites, keep stable `scenario`, `step`, `flow`, `tier`, and
+`dataset` values in metadata so JSONL comparison can distinguish each step.
 
 ## Read Results
 

@@ -277,6 +277,88 @@ func TestArtifactArrayContains_Missing(t *testing.T) {
 	}
 }
 
+func TestArtifactArrayMinLen(t *testing.T) {
+	r, err := (ArtifactArrayMinLen{
+		Key:    "route",
+		Path:   "stops",
+		MinLen: 2,
+	}).Score(context.Background(), nil, Case{
+		Artifacts: map[string]json.RawMessage{
+			"route": json.RawMessage(`{"stops":["Universidad de Santiago","Pajaritos"]}`),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Score: %v", err)
+	}
+	if !r.Passed || r.Score != 1.0 {
+		t.Fatalf("unexpected result: %+v", r)
+	}
+}
+
+func TestArtifactArrayMinLen_TooShort(t *testing.T) {
+	r, err := (ArtifactArrayMinLen{
+		Key:    "route",
+		Path:   "stops",
+		MinLen: 3,
+	}).Score(context.Background(), nil, Case{
+		Artifacts: map[string]json.RawMessage{
+			"route": json.RawMessage(`{"stops":["Pajaritos"]}`),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Score: %v", err)
+	}
+	if r.Passed || r.Score != 1.0/3.0 {
+		t.Fatalf("unexpected result: %+v", r)
+	}
+}
+
+func TestArtifactArrayMinLen_FailsGracefully(t *testing.T) {
+	tests := []struct {
+		name   string
+		metric ArtifactArrayMinLen
+		c      Case
+		want   string
+	}{
+		{
+			name:   "missing path",
+			metric: ArtifactArrayMinLen{Key: "route", Path: "stops", MinLen: 1},
+			c: Case{Artifacts: map[string]json.RawMessage{
+				"route": json.RawMessage(`{"status":"ready"}`),
+			}},
+			want: `key "stops" not found`,
+		},
+		{
+			name:   "non array",
+			metric: ArtifactArrayMinLen{Key: "route", Path: "status", MinLen: 1},
+			c: Case{Artifacts: map[string]json.RawMessage{
+				"route": json.RawMessage(`{"status":"ready"}`),
+			}},
+			want: "is not a JSON array",
+		},
+		{
+			name:   "invalid minimum",
+			metric: ArtifactArrayMinLen{Key: "route", Path: "stops"},
+			c: Case{Artifacts: map[string]json.RawMessage{
+				"route": json.RawMessage(`{"stops":[]}`),
+			}},
+			want: "MinLen must be >= 1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, err := tt.metric.Score(context.Background(), nil, tt.c)
+			if err != nil {
+				t.Fatalf("Score: %v", err)
+			}
+			if r.Passed || !strings.Contains(r.Reason, tt.want) {
+				t.Fatalf("unexpected result: %+v", r)
+			}
+		})
+	}
+}
+
 func TestArtifactMetric_InvalidJSON(t *testing.T) {
 	r, err := (ArtifactJSONPath{
 		Key:      "route",

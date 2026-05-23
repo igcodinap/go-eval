@@ -327,6 +327,16 @@ Add the default sink when creating the runner:
 r := eval.NewRunner(judge, eval.WithResultSink(eval.DefaultResultSink()))
 ```
 
+Add redactors when result metadata or reasons may contain sensitive IDs:
+
+```go
+r := eval.NewRunner(
+	judge,
+	eval.WithResultSink(eval.DefaultResultSink()),
+	eval.WithRedactors(eval.UUIDRedactor(), eval.FieldRedactor("trip_plan_id")),
+)
+```
+
 Then set `GOEVAL_RESULTS_DIR` during the run:
 
 ```bash

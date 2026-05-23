@@ -19,6 +19,7 @@ type Runner struct {
 	judge      Judge
 	timeout    time.Duration
 	sink       ResultSink
+	redactors  []Redactor
 	caseFilter func(Case) bool
 	sinkMu     sync.Mutex
 }
@@ -110,12 +111,18 @@ func (r *Runner) Run(tb testing.TB, m Metric, c Case) Result {
 }
 
 func (r *Runner) writeResult(tb testing.TB, result Result) {
+	r.writeResultNamed(tb, tb.Name(), result)
+}
+
+func (r *Runner) writeResultNamed(tb testing.TB, testName string, result Result) {
 	if r.sink == nil {
 		return
 	}
 
+	runResult := r.redactRunResult(newRunResult(testName, result))
+
 	r.sinkMu.Lock()
-	err := r.sink.Write(newRunResult(tb.Name(), result))
+	err := r.sink.Write(runResult)
 	r.sinkMu.Unlock()
 	if err != nil {
 		tb.Errorf("result sink: %v", err)
