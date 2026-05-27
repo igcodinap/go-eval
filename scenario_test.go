@@ -138,10 +138,10 @@ func TestRunScenario_AccumulatesHistoryArtifactsAndWritesMetadata(t *testing.T) 
 		string(got.Artifacts["budget"]) != `{"tokens":12}` {
 		t.Fatalf("unexpected artifacts: %+v", got.Artifacts)
 	}
-	if sink.count() != len(got.Results) {
-		t.Fatalf("expected one sink row per result, sink=%d results=%d", sink.count(), len(got.Results))
+	if sink.count() != len(got.Results)+1 {
+		t.Fatalf("expected one sink row per result plus summary, sink=%d results=%d", sink.count(), len(got.Results))
 	}
-	written := sink.last()
+	written := sink.results[len(sink.results)-2]
 	if written.Metadata["scenario"] != "planning_to_route_ready" ||
 		written.Metadata["step"] != "verify" ||
 		written.Metadata["tier"] != "critical" ||
@@ -208,7 +208,7 @@ func TestRunScenario_ContractsExpectFailAndContinuation(t *testing.T) {
 	if !sawExpectFail {
 		t.Fatalf("expected transformed expect-fail result, results=%+v", got.Results)
 	}
-	if sink.count() != len(got.Results) {
+	if sink.count() != len(got.Results)+1 {
 		t.Fatalf("expected sink rows for all results")
 	}
 }
@@ -370,4 +370,191 @@ func TestRunScenario_ParallelSharedRunner(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRunScenario_TierEnvFiltersScenario(t *testing.T) {
+	t.Setenv(EnvVar, "1")
+	t.Setenv(TierEnvVar, "critical")
+
+	var calls int
+	tb := &recordingTB{}
+	got := NewRunner(&MockJudge{}, DefaultTierFilter()).RunScenario(tb, Scenario{
+		Name: "nightly_only",
+		Tier: "extended",
+		Driver: func(ctx context.Context, req StepRequest) (StepResult, error) {
+			calls++
+			return StepResult{}, nil
+		},
+		Steps: []Step{{Name: "one"}},
+	})
+
+	if !tb.skipped || calls != 0 || len(got.Results) != 0 {
+		t.Fatalf("expected tier env skip, skipped=%v calls=%d result=%+v", tb.skipped, calls, got)
+	}
+}
+
+func TestRunScenario_StateIsolatedAndResultStateAccumulatesAcrossSteps(t *testing.T) {
+	t.Setenv(EnvVar, "1")
+
+	var secondSawInitial bool
+	var secondSawFirst bool
+	var secondSawMutation bool
+	got := NewRunner(&MockJudge{}).RunScenario(t, Scenario{
+		Name:  "stateful",
+		State: map[string]any{"trip_plan_id": "initial"},
+		Driver: func(ctx context.Context, req StepRequest) (StepResult, error) {
+			switch req.Step.Name {
+			case "one":
+				req.State["trip_plan_id"] = "mutated"
+				return StepResult{State: map[string]any{"summary": "first"}}, nil
+			case "two":
+				secondSawInitial = req.State["trip_plan_id"] == "initial"
+				secondSawFirst = req.State["summary"] == "first"
+				secondSawMutation = req.State["trip_plan_id"] == "mutated"
+				return StepResult{}, nil
+			default:
+				t.Fatalf("unexpected step %q", req.Step.Name)
+				return StepResult{}, nil
+			}
+		},
+		Steps: []Step{{Name: "one"}, {Name: "two"}},
+	})
+
+	if !got.Passed || !secondSawInitial || !secondSawFirst || secondSawMutation {
+		t.Fatalf("expected isolated request mutation and accumulated result state, result=%+v initial=%v first=%v mutation=%v", got, secondSawInitial, secondSawFirst, secondSawMutation)
+	}
+}
+
+func TestRunScenario_StepTimeoutOverridesRunnerTimeout(t *testing.T) {
+	t.Setenv(EnvVar, "1")
+
+	var driverDeadline time.Time
+	var metricDeadline time.Time
+	check := funcMetric(func(ctx context.Context, j Judge, c Case) (Result, error) {
+		var ok bool
+		metricDeadline, ok = ctx.Deadline()
+		if !ok {
+			t.Fatalf("expected metric deadline")
+		}
+		return Result{Score: 1, Passed: true, Metric: "Check"}, nil
+	})
+
+	start := time.Now()
+	got := NewRunner(&MockJudge{}, WithTimeout(time.Hour)).RunScenario(t, Scenario{
+		Name: "step_timeout",
+		Driver: func(ctx context.Context, req StepRequest) (StepResult, error) {
+			var ok bool
+			driverDeadline, ok = ctx.Deadline()
+			if !ok {
+				t.Fatalf("expected driver deadline")
+			}
+			return StepResult{}, nil
+		},
+		Steps: []Step{{Name: "one", Timeout: 20 * time.Millisecond, Checks: []Metric{check}}},
+	})
+
+	if !got.Passed || driverDeadline.Sub(start) > time.Second || metricDeadline.Sub(start) > time.Second {
+		t.Fatalf("step timeout did not override runner timeout: result=%+v driver=%s metric=%s start=%s", got, driverDeadline, metricDeadline, start)
+	}
+}
+
+func TestRunScenario_RepeatAggregatesPassRateAndMetadata(t *testing.T) {
+	t.Setenv(EnvVar, "1")
+
+	sink := &recordingSink{}
+	var calls int
+	tb := &recordingTB{}
+	got := NewRunner(&MockJudge{}, WithResultSink(sink)).RunScenario(tb, Scenario{
+		Name:   "flaky",
+		Repeat: ScenarioRepeat{N: 3, PassRate: 2.0 / 3.0},
+		Driver: func(ctx context.Context, req StepRequest) (StepResult, error) {
+			calls++
+			return StepResult{Output: "ok"}, nil
+		},
+		Steps: []Step{{Name: "one", Checks: []Metric{funcMetric(func(ctx context.Context, j Judge, c Case) (Result, error) {
+			repeatRun, _ := c.Metadata["repeat_run"].(int)
+			passed := repeatRun != 2
+			return Result{Score: boolScore(passed), Passed: passed, Metric: "Flaky", Reason: "scripted"}, nil
+		})}}},
+	})
+
+	if !got.Passed || tb.errored || calls != 3 || got.RunCount != 3 || got.PassRuns != 2 {
+		t.Fatalf("unexpected repeat result: result=%+v errored=%v calls=%d", got, tb.errored, calls)
+	}
+	results := sink.all()
+	if len(results) != 4 {
+		t.Fatalf("expected 3 metric rows plus summary, got %d", len(results))
+	}
+	if results[0].Metadata["repeat_run"] != 1 || results[1].Metadata["repeat_run"] != 2 || results[2].Metadata["repeat_run"] != 3 {
+		t.Fatalf("repeat metadata missing: %+v", results)
+	}
+	if results[3].Kind != runResultKindScenarioSummary || results[3].ScenarioSummary.PassRuns != 2 {
+		t.Fatalf("missing scenario summary: %+v", results[3])
+	}
+}
+
+func TestRunScenario_RepeatFailsBelowPassRate(t *testing.T) {
+	t.Setenv(EnvVar, "1")
+
+	tb := &recordingTB{}
+	got := NewRunner(&MockJudge{}).RunScenario(tb, Scenario{
+		Name:   "flaky_fail",
+		Repeat: ScenarioRepeat{N: 3, PassRate: 1},
+		Driver: func(ctx context.Context, req StepRequest) (StepResult, error) {
+			return StepResult{}, nil
+		},
+		Steps: []Step{{Name: "one", Checks: []Metric{scriptedMetric{
+			name:   "X",
+			result: Result{Score: 0, Passed: false, Metric: "X", Reason: "fail"},
+		}}}},
+	})
+
+	if got.Passed || !tb.errored || got.PassRuns != 0 {
+		t.Fatalf("expected aggregate repeat failure, result=%+v errored=%v", got, tb.errored)
+	}
+}
+
+func TestRunScenario_StepToolPatterns(t *testing.T) {
+	t.Setenv(EnvVar, "1")
+
+	tb := &recordingTB{}
+	got := NewRunner(&MockJudge{}).RunScenario(tb, Scenario{
+		Name: "tool_patterns",
+		Driver: func(ctx context.Context, req StepRequest) (StepResult, error) {
+			return StepResult{Turns: []Turn{{ToolCalls: []ToolCall{{Name: "route_plan"}}}}}, nil
+		},
+		Steps: []Step{{
+			Name:                  "one",
+			RequiredToolPatterns:  []string{"route_*"},
+			ForbiddenToolPatterns: []string{"delete_*"},
+		}},
+	})
+
+	if !got.Passed || tb.errored {
+		t.Fatalf("expected step tool patterns to pass, result=%+v errored=%v", got, tb.errored)
+	}
+}
+
+func TestRunScenario_InvalidStepToolPatternFatal(t *testing.T) {
+	t.Setenv(EnvVar, "1")
+
+	tb := &recordingTB{}
+	_ = NewRunner(&MockJudge{}).RunScenario(tb, Scenario{
+		Name: "bad_pattern",
+		Driver: func(ctx context.Context, req StepRequest) (StepResult, error) {
+			return StepResult{}, nil
+		},
+		Steps: []Step{{Name: "one", RequiredToolPatterns: []string{"route_["}}},
+	})
+
+	if !tb.fataled {
+		t.Fatalf("expected invalid pattern fatal")
+	}
+}
+
+func boolScore(v bool) float64 {
+	if v {
+		return 1
+	}
+	return 0
 }

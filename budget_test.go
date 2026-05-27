@@ -181,3 +181,30 @@ func TestBudgetWrappersRejectNilMetric(t *testing.T) {
 		t.Fatalf("expected latency budget nil metric error")
 	}
 }
+
+func TestOutputLengthBudget(t *testing.T) {
+	tests := []struct {
+		name   string
+		metric OutputLengthBudget
+		output string
+		want   bool
+	}{
+		{name: "disabled", metric: OutputLengthBudget{}, output: "anything", want: true},
+		{name: "under rune budget", metric: OutputLengthBudget{MaxRunes: 4}, output: "café", want: true},
+		{name: "over rune budget", metric: OutputLengthBudget{MaxRunes: 3}, output: "café", want: false},
+		{name: "over word budget", metric: OutputLengthBudget{MaxWords: 2}, output: "uno dos tres", want: false},
+		{name: "both budgets pass", metric: OutputLengthBudget{MaxRunes: 20, MaxWords: 3}, output: "uno dos", want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.metric.Score(context.Background(), nil, Case{Output: tt.output})
+			if err != nil {
+				t.Fatalf("Score: %v", err)
+			}
+			if got.Passed != tt.want {
+				t.Fatalf("unexpected result: %+v", got)
+			}
+		})
+	}
+}

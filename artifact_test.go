@@ -55,6 +55,14 @@ func TestArtifactMetrics_NilArtifactsFailGracefully(t *testing.T) {
 			name:   "array contains",
 			metric: ArtifactArrayContains{Key: "route", Path: "stops", Expected: "Pajaritos"},
 		},
+		{
+			name:   "array not contains",
+			metric: ArtifactArrayNotContains{Key: "route", Path: "stops", Expected: "Pajaritos"},
+		},
+		{
+			name:   "subset",
+			metric: ArtifactSubset{Key: "route", Expected: json.RawMessage(`{"status":"ready"}`)},
+		},
 	}
 
 	for _, tt := range tests {
@@ -392,5 +400,178 @@ func TestArtifactMetric_InvalidPath(t *testing.T) {
 	}
 	if r.Passed || !strings.Contains(r.Reason, "unsupported JSONPath") {
 		t.Fatalf("unexpected result: %+v", r)
+	}
+}
+
+func TestArtifactNotExists(t *testing.T) {
+	c := Case{Artifacts: map[string]json.RawMessage{
+		"route": json.RawMessage(`{"status":"ready"}`),
+	}}
+
+	pass, err := (ArtifactNotExists{Key: "budget"}).Score(context.Background(), nil, c)
+	if err != nil {
+		t.Fatalf("Score: %v", err)
+	}
+	if !pass.Passed {
+		t.Fatalf("expected missing artifact to pass, got %+v", pass)
+	}
+
+	fail, err := (ArtifactNotExists{Key: "route"}).Score(context.Background(), nil, c)
+	if err != nil {
+		t.Fatalf("Score: %v", err)
+	}
+	if fail.Passed {
+		t.Fatalf("expected existing artifact to fail, got %+v", fail)
+	}
+
+	nilArtifactsPass, err := (ArtifactNotExists{Key: "route"}).Score(context.Background(), nil, Case{})
+	if err != nil {
+		t.Fatalf("Score: %v", err)
+	}
+	if !nilArtifactsPass.Passed {
+		t.Fatalf("expected missing artifact in nil map to pass, got %+v", nilArtifactsPass)
+	}
+}
+
+func TestArtifactArrayNotContainsWithNormalizer(t *testing.T) {
+	c := Case{Artifacts: map[string]json.RawMessage{
+		"route": json.RawMessage(`{"stops":["USACH","Pajaritos"]}`),
+	}}
+
+	result, err := (ArtifactArrayNotContains{
+		Key:        "route",
+		Path:       "stops",
+		Expected:   "los heroes",
+		Normalizer: ChainNormalizers(CaseFoldNormalizer(), SpanishASCIIFoldNormalizer()),
+	}).Score(context.Background(), nil, c)
+	if err != nil {
+		t.Fatalf("Score: %v", err)
+	}
+	if !result.Passed {
+		t.Fatalf("expected absent value to pass, got %+v", result)
+	}
+
+	result, err = (ArtifactArrayNotContains{
+		Key:        "route",
+		Path:       "stops",
+		Expected:   "pájaritos",
+		Normalizer: ChainNormalizers(CaseFoldNormalizer(), SpanishASCIIFoldNormalizer()),
+	}).Score(context.Background(), nil, c)
+	if err != nil {
+		t.Fatalf("Score: %v", err)
+	}
+	if result.Passed {
+		t.Fatalf("expected normalized present value to fail, got %+v", result)
+	}
+}
+
+func TestArtifactArrayContainsWildcardPath(t *testing.T) {
+	c := Case{Artifacts: map[string]json.RawMessage{
+		"route": json.RawMessage(`{"stops":[{"name":"USACH"},{"name":"Pajaritos"}]}`),
+	}}
+
+	result, err := (ArtifactArrayContains{
+		Key:      "route",
+		Path:     "stops[*].name",
+		Expected: "Pajaritos",
+	}).Score(context.Background(), nil, c)
+	if err != nil {
+		t.Fatalf("Score: %v", err)
+	}
+	if !result.Passed {
+		t.Fatalf("expected wildcard path to match, got %+v", result)
+	}
+}
+
+func TestArtifactWildcardPathErrorsOnNonArray(t *testing.T) {
+	c := Case{Artifacts: map[string]json.RawMessage{
+		"route": json.RawMessage(`{"stops":{"name":"USACH"}}`),
+	}}
+
+	result, err := (ArtifactArrayContains{
+		Key:      "route",
+		Path:     "stops[*].name",
+		Expected: "USACH",
+	}).Score(context.Background(), nil, c)
+	if err != nil {
+		t.Fatalf("Score: %v", err)
+	}
+	if result.Passed || !strings.Contains(result.Reason, "current node is not an array") {
+		t.Fatalf("expected wildcard non-array failure, got %+v", result)
+	}
+}
+
+func TestArtifactSubsetMatchesPartialJSON(t *testing.T) {
+	c := Case{Artifacts: map[string]json.RawMessage{
+		"route": json.RawMessage(`{"success":true,"routeStatus":"ready","stops":[{"name":"Pajaritos","id":2},{"name":"USACH","id":1}]}`),
+	}}
+
+	result, err := (ArtifactSubset{
+		Key: "route",
+		Expected: json.RawMessage(`{
+			"success": true,
+			"routeStatus": "READY",
+			"stops": [{"name": "usách"}]
+		}`),
+		Normalizer: ChainNormalizers(CaseFoldNormalizer(), SpanishASCIIFoldNormalizer()),
+	}).Score(context.Background(), nil, c)
+	if err != nil {
+		t.Fatalf("Score: %v", err)
+	}
+	if !result.Passed {
+		t.Fatalf("expected subset match, got %+v", result)
+	}
+}
+
+func TestArtifactSubsetWildcardPath(t *testing.T) {
+	c := Case{Artifacts: map[string]json.RawMessage{
+		"route": json.RawMessage(`{"stops":[{"name":"USACH","id":1},{"name":"Pajaritos","id":2}]}`),
+	}}
+
+	result, err := (ArtifactSubset{
+		Key:        "route",
+		Path:       "stops[*]",
+		Expected:   json.RawMessage(`{"name":"pájaritos"}`),
+		Normalizer: ChainNormalizers(CaseFoldNormalizer(), SpanishASCIIFoldNormalizer()),
+	}).Score(context.Background(), nil, c)
+	if err != nil {
+		t.Fatalf("Score: %v", err)
+	}
+	if !result.Passed {
+		t.Fatalf("expected wildcard subset match, got %+v", result)
+	}
+}
+
+func TestArtifactSubsetArrayMatcherBacktracks(t *testing.T) {
+	c := Case{Artifacts: map[string]json.RawMessage{
+		"route": json.RawMessage(`{"stops":[{"name":"USACH","id":1},{"name":"USACH","id":2}]}`),
+	}}
+
+	result, err := (ArtifactSubset{
+		Key:      "route",
+		Expected: json.RawMessage(`{"stops":[{"name":"USACH"},{"id":1}]}`),
+	}).Score(context.Background(), nil, c)
+	if err != nil {
+		t.Fatalf("Score: %v", err)
+	}
+	if !result.Passed {
+		t.Fatalf("expected array subset matcher to find a non-greedy assignment, got %+v", result)
+	}
+}
+
+func TestArtifactSubsetReportsMismatch(t *testing.T) {
+	c := Case{Artifacts: map[string]json.RawMessage{
+		"route": json.RawMessage(`{"success":true}`),
+	}}
+
+	result, err := (ArtifactSubset{
+		Key:      "route",
+		Expected: json.RawMessage(`{"routeStatus":"ready"}`),
+	}).Score(context.Background(), nil, c)
+	if err != nil {
+		t.Fatalf("Score: %v", err)
+	}
+	if result.Passed || !strings.Contains(result.Reason, "routeStatus is missing") {
+		t.Fatalf("expected subset mismatch, got %+v", result)
 	}
 }

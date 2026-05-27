@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	eval "github.com/igcodinap/go-eval"
 )
@@ -23,6 +24,10 @@ func TestRoutePlanningScenario(t *testing.T) {
 	result := r.RunScenario(t, eval.Scenario{
 		Name: "planning_to_route_ready",
 		Tier: "critical",
+		State: map[string]any{
+			"locale": "es-CL",
+		},
+		Repeat: eval.ScenarioRepeat{N: 2, PassRate: 1},
 		Metadata: map[string]any{
 			"flow":    "route_planner.plan",
 			"dataset": "route-planner/scenario-v1",
@@ -31,19 +36,28 @@ func TestRoutePlanningScenario(t *testing.T) {
 		Driver: routePlannerDriver,
 		Steps: []eval.Step{
 			{
-				Name:           "greeting",
-				Input:          "Hola",
-				ForbiddenTools: []string{"plan_route", "select_map_items"},
-				MaxToolCalls:   1,
+				Name:                  "greeting",
+				Input:                 "Hola",
+				ForbiddenToolPatterns: []string{"plan_*", "select_*"},
+				MaxToolCalls:          1,
+				Timeout:               500 * time.Millisecond,
 			},
 			{
-				Name:          "ready_route_request",
-				Input:         "Propón la ruta",
-				RequiredTools: []string{"plan_route"},
+				Name:                 "ready_route_request",
+				Input:                "Propón la ruta",
+				RequiredToolPatterns: []string{"plan_*"},
+				Timeout:              2 * time.Second,
 				Checks: []eval.Metric{
-					eval.ArtifactJSONPath{Key: "trip_plan", Path: "status", Expected: "ready"},
-					eval.ArtifactJSONPath{Key: "route", Path: "success", Expected: "true"},
-					eval.ArtifactArrayMinLen{Key: "route", Path: "stops", MinLen: 2},
+					eval.Contract{
+						ContractName: "ready_route",
+						Checks: []eval.Metric{
+							eval.ArtifactJSONPath{Key: "trip_plan", Path: "status", Expected: "ready"},
+							eval.ArtifactSubset{Key: "route", Expected: json.RawMessage(`{"success":true}`)},
+							eval.ArtifactArrayMinLen{Key: "route", Path: "stops", MinLen: 2},
+							eval.ArtifactArrayNotContains{Key: "route", Path: "stops", Expected: "Aeropuerto"},
+							eval.OutputLengthBudget{MaxRunes: 120},
+						},
+					},
 				},
 				Metadata: map[string]any{
 					"trip_plan_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -63,6 +77,7 @@ func routePlannerDriver(ctx context.Context, req eval.StepRequest) (eval.StepRes
 	case "greeting":
 		return eval.StepResult{
 			Output: "Hola, puedo ayudarte a planificar una ruta.",
+			State:  map[string]any{"greeted": true},
 			Turns: []eval.Turn{
 				{Role: eval.RoleUser, Content: req.Step.Input},
 				{Role: eval.RoleAssistant, Content: "Hola, puedo ayudarte a planificar una ruta."},

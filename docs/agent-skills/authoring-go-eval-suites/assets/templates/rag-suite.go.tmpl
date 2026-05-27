@@ -23,12 +23,7 @@ func TestRAGEval(t *testing.T) {
 	r := eval.NewRunner(
 		judge,
 		eval.WithResultSink(eval.DefaultResultSink()),
-		eval.WithCaseFilter(func(c eval.Case) bool {
-			if os.Getenv("GOEVAL_TIER") == "critical" {
-				return c.Metadata["tier"] == "critical"
-			}
-			return true
-		}),
+		eval.DefaultTierFilter(),
 	)
 
 	cases := []struct {

@@ -30,6 +30,20 @@ func TestSummarizeAggregatesByMetric(t *testing.T) {
 	}
 }
 
+func TestSummarizeSkipsScenarioSummaryRows(t *testing.T) {
+	summary := Summarize([]eval.RunResult{
+		{Metric: "Faithfulness", Score: 1.0, Passed: true, Tokens: 10},
+		{Kind: "scenario_summary", Metric: "_scenario_summary", Score: 1.0, Passed: true},
+	})
+
+	if summary.Total != 1 || summary.Passed != 1 {
+		t.Fatalf("scenario summary rows should not count as metric rows: %+v", summary)
+	}
+	if _, ok := summary.ByMetric["_scenario_summary"]; ok {
+		t.Fatalf("scenario summary metric should be skipped: %+v", summary.ByMetric)
+	}
+}
+
 func TestSummarizeFileReadsJSONL(t *testing.T) {
 	path := writeJSONL(t,
 		`{"test_name":"TestA","metric":"Faithfulness","score":1,"passed":true}`+"\n"+

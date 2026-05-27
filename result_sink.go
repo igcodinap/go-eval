@@ -12,11 +12,15 @@ import (
 // ResultsDirEnvVar is the env var used by DefaultResultSink.
 const ResultsDirEnvVar = "GOEVAL_RESULTS_DIR"
 
+const runResultKindScenarioSummary = "scenario_summary"
+
 // RunResult is the serialized form of a metric run.
 type RunResult struct {
 	Timestamp        string            `json:"timestamp"`
+	Kind             string            `json:"kind,omitempty"`
 	TestName         string            `json:"test_name"`
 	Metric           string            `json:"metric"`
+	ScenarioName     string            `json:"scenario_name,omitempty"`
 	Score            float64           `json:"score"`
 	Passed           bool              `json:"passed"`
 	Reason           string            `json:"reason"`
@@ -26,6 +30,30 @@ type RunResult struct {
 	LatencyNS        int64             `json:"latency_ns"`
 	Dimensions       []DimensionResult `json:"dimensions,omitempty"`
 	Metadata         map[string]any    `json:"metadata,omitempty"`
+	ScenarioSummary  *ScenarioSummary  `json:"scenario_summary,omitempty"`
+}
+
+// ScenarioSummary is the JSONL diagnostic summary emitted after RunScenario.
+type ScenarioSummary struct {
+	Name         string            `json:"name"`
+	Passed       bool              `json:"passed"`
+	RunCount     int               `json:"run_count"`
+	PassRuns     int               `json:"pass_runs"`
+	Steps        []StepSummary     `json:"steps,omitempty"`
+	Metadata     map[string]any    `json:"metadata,omitempty"`
+	ArtifactKeys []string          `json:"artifact_keys,omitempty"`
+	Dimensions   []DimensionResult `json:"dimensions,omitempty"`
+}
+
+// StepSummary captures per-step diagnostics for scenario JSONL summaries.
+type StepSummary struct {
+	Name          string         `json:"name"`
+	Passed        bool           `json:"passed"`
+	RepeatRun     int            `json:"repeat_run,omitempty"`
+	ToolCalls     []string       `json:"tool_calls,omitempty"`
+	ArtifactKeys  []string       `json:"artifact_keys,omitempty"`
+	FailedMetrics []string       `json:"failed_metrics,omitempty"`
+	Metadata      map[string]any `json:"metadata,omitempty"`
 }
 
 // ResultSink receives per-run serialized results.

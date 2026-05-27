@@ -39,7 +39,7 @@ func UUIDRedactor() Redactor {
 // matches field.
 func FieldRedactor(field string) Redactor {
 	return func(path string, value string) string {
-		if field == "" || !strings.HasPrefix(path, "metadata.") || finalPathSegment(path) != field {
+		if field == "" || !isMetadataPath(path) || finalPathSegment(path) != field {
 			return value
 		}
 		return "[REDACTED]"
@@ -62,6 +62,9 @@ func (r *Runner) redactRunResult(result RunResult) RunResult {
 		}
 	}
 	out.Metadata = redactMetadata(r.redactors, "metadata", result.Metadata)
+	if result.ScenarioSummary != nil {
+		out.ScenarioSummary = redactScenarioSummary(r.redactors, result.ScenarioSummary)
+	}
 	return out
 }
 
@@ -144,6 +147,46 @@ func redactString(redactors []Redactor, path string, value string) string {
 	return value
 }
 
+func redactScenarioSummary(redactors []Redactor, summary *ScenarioSummary) *ScenarioSummary {
+	if summary == nil {
+		return nil
+	}
+	out := *summary
+	out.Metadata = redactMetadata(redactors, "scenario_summary.metadata", summary.Metadata)
+	if len(summary.Dimensions) > 0 {
+		out.Dimensions = make([]DimensionResult, len(summary.Dimensions))
+		copy(out.Dimensions, summary.Dimensions)
+		for i := range out.Dimensions {
+			path := "scenario_summary.dimensions." + strconv.Itoa(i) + ".reason"
+			out.Dimensions[i].Reason = redactString(redactors, path, out.Dimensions[i].Reason)
+		}
+	}
+	if len(summary.Steps) > 0 {
+		out.Steps = make([]StepSummary, len(summary.Steps))
+		copy(out.Steps, summary.Steps)
+		for i := range out.Steps {
+			stepPath := "scenario_summary.steps." + strconv.Itoa(i)
+			out.Steps[i].Metadata = redactMetadata(redactors, stepPath+".metadata", summary.Steps[i].Metadata)
+			out.Steps[i].FailedMetrics = redactStringSlice(redactors, stepPath+".failed_metrics", summary.Steps[i].FailedMetrics)
+			out.Steps[i].ToolCalls = redactStringSlice(redactors, stepPath+".tool_calls", summary.Steps[i].ToolCalls)
+			out.Steps[i].ArtifactKeys = redactStringSlice(redactors, stepPath+".artifact_keys", summary.Steps[i].ArtifactKeys)
+		}
+	}
+	out.ArtifactKeys = redactStringSlice(redactors, "scenario_summary.artifact_keys", summary.ArtifactKeys)
+	return &out
+}
+
+func redactStringSlice(redactors []Redactor, path string, values []string) []string {
+	if values == nil {
+		return nil
+	}
+	out := make([]string, len(values))
+	for i, value := range values {
+		out[i] = redactString(redactors, path+"."+strconv.Itoa(i), value)
+	}
+	return out
+}
+
 func finalPathSegment(path string) string {
 	if path == "" {
 		return ""
@@ -153,4 +196,8 @@ func finalPathSegment(path string) string {
 		return path
 	}
 	return path[i+1:]
+}
+
+func isMetadataPath(path string) bool {
+	return strings.HasPrefix(path, "metadata.") || strings.Contains(path, ".metadata.")
 }

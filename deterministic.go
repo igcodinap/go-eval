@@ -11,7 +11,9 @@ import (
 )
 
 // Contains checks whether Case.Output contains Case.Expected.
-type Contains struct{}
+type Contains struct {
+	Normalizer Normalizer
+}
 
 // Name implements Metric.
 func (m Contains) Name() string { return "Contains" }
@@ -20,7 +22,9 @@ func (m Contains) Name() string { return "Contains" }
 func (m Contains) Score(ctx context.Context, _ Judge, c Case) (Result, error) {
 	_ = ctx
 
-	passed := strings.Contains(c.Output, c.Expected)
+	output := normalizeString(m.Normalizer, c.Output)
+	expected := normalizeString(m.Normalizer, c.Expected)
+	passed := strings.Contains(output, expected)
 	if passed {
 		return Result{
 			Score:  1.0,

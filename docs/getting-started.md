@@ -401,3 +401,8 @@ The repo also ships a canonical authoring guide for teams and coding agents
 building larger suites: [`docs/agent-skills/authoring-go-eval-suites/`](agent-skills/authoring-go-eval-suites/).
 It covers case design, metric selection, JSONL reports, and common failure
 patterns without requiring any specific agent runtime.
+
+Use `eval.DefaultTierFilter()` on the runner and set `GOEVAL_TIER=critical`
+for fast CI slices. Multiple tiers are comma-separated, for example
+`GOEVAL_TIER=critical,standard` for broader pre-merge runs. The environment
+filter is opt-in; runners without `DefaultTierFilter()` ignore `GOEVAL_TIER`.

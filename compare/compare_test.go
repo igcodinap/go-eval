@@ -244,6 +244,27 @@ func TestCompareIncludesCompoundDimensionDeltas(t *testing.T) {
 	}
 }
 
+func TestCompareSkipsScenarioSummaryRows(t *testing.T) {
+	baseline := []eval.RunResult{
+		{TestName: "TestEval/scenario", Metric: "_scenario_summary", Kind: "scenario_summary", Score: 1, Passed: true},
+		{TestName: "TestEval/step", Metric: "ArtifactSubset", Score: 1, Passed: true},
+	}
+	current := []eval.RunResult{
+		{TestName: "TestEval/scenario", Metric: "_scenario_summary", Kind: "scenario_summary", Score: 0.5, Passed: false},
+		{TestName: "TestEval/only-current-summary", Metric: "_scenario_summary", Kind: "scenario_summary", Score: 1, Passed: true},
+		{TestName: "TestEval/step", Metric: "ArtifactSubset", Score: 1, Passed: true},
+	}
+
+	report := Compare(baseline, current)
+
+	if report.Summary.Total != 1 || report.Summary.Unchanged != 1 {
+		t.Fatalf("scenario summary rows should not affect compare: %+v", report.Summary)
+	}
+	if len(report.Entries) != 1 || report.Entries[0].Identity.Metric != "ArtifactSubset" {
+		t.Fatalf("unexpected entries: %+v", report.Entries)
+	}
+}
+
 func findEntry(t *testing.T, report Report, testName string, caseName string, metric string) Entry {
 	t.Helper()
 	for _, entry := range report.Entries {

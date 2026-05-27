@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [v0.8.0] - 2026-05-27
+
+### Added
+
+- v0.8 scenario ergonomics: `ScenarioRepeat`, scenario state passing,
+  per-case/per-step timeouts, scenario summary JSONL rows, and `GOEVAL_TIER`
+  filtering with `WithTierFilter` / `DefaultTierFilter`
+- Grouped deterministic checks with `Contract`
+- Tool pattern assertions on `RequiredTools`, `ForbiddenTool`, and scenario
+  steps
+- Artifact and output helpers: `ArtifactNotExists`,
+  `ArtifactArrayNotContains`, `ArtifactSubset`, and `OutputLengthBudget`
+- String normalizers for deterministic comparisons:
+  `CaseFoldNormalizer`, `SpanishASCIIFoldNormalizer`, and
+  `ChainNormalizers`
+
 ## [v0.7.0] - 2026-05-27
 
 ### Added

@@ -42,9 +42,9 @@ Do not use it to implement the agent flow itself, benchmark non-AI code, or chan
 | Custom rubric | `GEval` |
 | Several rubric dimensions in one judge call | `Compound` |
 | Cheap format or field checks | `Contains`, `Regex`, `JSONPath`, `FieldCount` |
-| Structured artifact state | `ArtifactExists`, `ArtifactJSONPath`, `ArtifactArrayMinLen` |
+| Structured artifact state | `ArtifactExists`, `ArtifactNotExists`, `ArtifactJSONPath`, `ArtifactArrayMinLen`, `ArtifactSubset` |
 | Tool trajectory contracts | `RequiredTools`, `ForbiddenTool`, `StepBudget`, `ToolCallAccuracy`, `ToolCallF1` |
-| Ordered multi-turn agent flows | `Runner.RunScenario` with `Scenario` and `Step` contracts |
+| Ordered multi-turn agent flows | `Runner.RunScenario` with `Scenario`, `Step`, `ScenarioRepeat`, and `Contract` |
 | Expensive judge only after cheap guard | `Precheck` |
 
 Read `references/metrics-reference.md` when authoring or diagnosing a specific metric.
@@ -69,10 +69,13 @@ Read `references/metrics-reference.md` when authoring or diagnosing a specific m
 | Skip-gated normal tests | `go test ./...` |
 | Run evals | `GOEVAL=1 go test ./...` |
 | Save JSONL | `GOEVAL=1 GOEVAL_RESULTS_DIR=.eval-results go test ./...` |
+| Critical tier only | `GOEVAL=1 GOEVAL_TIER=critical go test ./...` |
 | Inspect prompts | `GOEVAL=1 GOEVAL_TRACE=1 go test -v ./...` |
 | Bench evals | `GOEVAL=1 go test -bench=. -count=5` |
 
-Use `WithCaseFilter` for tiered runs, usually `tier == "critical"` in fast CI and all tiers in scheduled runs.
+Use `eval.DefaultTierFilter()` on runners for tiered runs, usually
+`GOEVAL_TIER=critical` in fast CI and all tiers in scheduled runs. Runners
+without `DefaultTierFilter()` ignore `GOEVAL_TIER`.
 
 For scenario suites, keep stable `scenario`, `step`, `flow`, `tier`, and
 `dataset` values in metadata so JSONL comparison can distinguish each step.

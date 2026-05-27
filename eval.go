@@ -3,6 +3,7 @@ package eval
 import (
 	"context"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -10,6 +11,9 @@ import (
 
 // EnvVar gates eval execution. When unset or empty, Runner.Run and Bench skip.
 const EnvVar = "GOEVAL"
+
+// TierEnvVar filters eval execution when DefaultTierFilter is installed.
+const TierEnvVar = "GOEVAL_TIER"
 
 // Runner holds shared state and executes metrics against cases.
 //
@@ -21,6 +25,7 @@ type Runner struct {
 	sink       ResultSink
 	redactors  []Redactor
 	caseFilter func(Case) bool
+	tierFilter []string
 	sinkMu     sync.Mutex
 }
 
@@ -41,6 +46,22 @@ func WithCaseFilter(pred func(Case) bool) Option {
 	return func(r *Runner) {
 		r.caseFilter = pred
 	}
+}
+
+// WithTierFilter skips cases whose metadata tier is not in tiers.
+//
+// Empty tier strings are ignored. If every tier is empty, the option is a no-op.
+func WithTierFilter(tiers ...string) Option {
+	return func(r *Runner) {
+		r.tierFilter = append(r.tierFilter, cleanTiers(tiers)...)
+	}
+}
+
+// DefaultTierFilter returns a tier filter option using GOEVAL_TIER.
+//
+// Runners do not read GOEVAL_TIER unless this option is installed.
+func DefaultTierFilter() Option {
+	return WithTierFilter(splitTierEnv(os.Getenv(TierEnvVar))...)
 }
 
 // NewRunner returns a Runner bound to the provided Judge.
@@ -68,12 +89,12 @@ func (r *Runner) Run(tb testing.TB, m Metric, c Case) Result {
 		tb.Skip("eval skipped, set " + EnvVar + "=1 to run")
 		return Result{}
 	}
-	if r.caseFilter != nil && !r.caseFilter(c) {
+	if !r.shouldRun(c) {
 		tb.Skip("eval skipped by case filter")
 		return Result{}
 	}
 
-	ctx, cancel := runnerContext(r.timeout)
+	ctx, cancel := runnerContext(r.timeoutForCase(c))
 	defer cancel()
 
 	judge := maybeTrace(r.judge, tb)
@@ -115,11 +136,15 @@ func (r *Runner) writeResult(tb testing.TB, result Result) {
 }
 
 func (r *Runner) writeResultNamed(tb testing.TB, testName string, result Result) {
+	r.writeRunResult(tb, newRunResult(testName, result))
+}
+
+func (r *Runner) writeRunResult(tb testing.TB, runResult RunResult) {
 	if r.sink == nil {
 		return
 	}
 
-	runResult := r.redactRunResult(newRunResult(testName, result))
+	runResult = r.redactRunResult(runResult)
 
 	r.sinkMu.Lock()
 	err := r.sink.Write(runResult)
@@ -129,9 +154,60 @@ func (r *Runner) writeResultNamed(tb testing.TB, testName string, result Result)
 	}
 }
 
+func (r *Runner) shouldRun(c Case) bool {
+	if len(r.tierFilter) > 0 && !tierMatches(c.Metadata, r.tierFilter) {
+		return false
+	}
+	return r.caseFilter == nil || r.caseFilter(c)
+}
+
+func (r *Runner) timeoutForCase(c Case) time.Duration {
+	if c.Timeout > 0 {
+		return c.Timeout
+	}
+	return r.timeout
+}
+
 func runnerContext(timeout time.Duration) (context.Context, context.CancelFunc) {
 	if timeout <= 0 {
 		return context.Background(), func() {}
 	}
 	return context.WithTimeout(context.Background(), timeout)
+}
+
+func tierMatches(metadata map[string]any, tiers []string) bool {
+	tier, ok := metadata["tier"].(string)
+	if !ok {
+		return false
+	}
+	for _, want := range tiers {
+		if tier == want {
+			return true
+		}
+	}
+	return false
+}
+
+func splitTierEnv(value string) []string {
+	if value == "" {
+		return nil
+	}
+	return cleanTiers(strings.Split(value, ","))
+}
+
+func cleanTiers(tiers []string) []string {
+	out := make([]string, 0, len(tiers))
+	seen := map[string]struct{}{}
+	for _, tier := range tiers {
+		tier = strings.TrimSpace(tier)
+		if tier == "" {
+			continue
+		}
+		if _, exists := seen[tier]; exists {
+			continue
+		}
+		seen[tier] = struct{}{}
+		out = append(out, tier)
+	}
+	return out
 }

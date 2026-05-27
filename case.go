@@ -2,7 +2,10 @@
 // and a Runner that ties them into the standard Go testing workflow.
 package eval
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"time"
+)
 
 // Case is a single LLM evaluation input.
 //
@@ -21,5 +24,6 @@ type Case struct {
 	ExpectedToolCalls []ToolCall
 	Metadata          map[string]any
 	Artifacts         map[string]json.RawMessage
+	Timeout           time.Duration
 	_                 struct{}
 }

@@ -3,7 +3,9 @@ package eval
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
+	"unicode"
 )
 
 // TokenBudget fails the wrapped metric when its result exceeds MaxTokens.
@@ -97,11 +99,88 @@ func (m LatencyBudget) Score(ctx context.Context, j Judge, c Case) (Result, erro
 	return result, nil
 }
 
+// OutputLengthBudget fails when an agent output is longer than configured.
+//
+// MaxRunes and MaxWords are both optional. When both are set, both budgets must
+// pass. Counts are deterministic approximations over Case.Output, not model
+// tokenizer counts.
+type OutputLengthBudget struct {
+	MaxRunes int
+	MaxWords int
+}
+
+// Name implements Metric.
+func (m OutputLengthBudget) Name() string { return "OutputLengthBudget" }
+
+// Score implements Metric.
+func (m OutputLengthBudget) Score(ctx context.Context, _ Judge, c Case) (Result, error) {
+	_ = ctx
+
+	runes := len([]rune(c.Output))
+	words := wordCount(c.Output)
+	if m.MaxRunes <= 0 && m.MaxWords <= 0 {
+		return Result{
+			Score:  1,
+			Passed: true,
+			Metric: m.Name(),
+			Reason: "output length budget disabled",
+		}, nil
+	}
+
+	var failures []string
+	score := 1.0
+	if m.MaxRunes > 0 && runes > m.MaxRunes {
+		failures = append(failures, fmt.Sprintf("runes %d > %d", runes, m.MaxRunes))
+		score = minFloat(score, safeRatio(m.MaxRunes, runes))
+	}
+	if m.MaxWords > 0 && words > m.MaxWords {
+		failures = append(failures, fmt.Sprintf("words %d > %d", words, m.MaxWords))
+		score = minFloat(score, safeRatio(m.MaxWords, words))
+	}
+	if len(failures) == 0 {
+		return Result{
+			Score:  1,
+			Passed: true,
+			Metric: m.Name(),
+			Reason: fmt.Sprintf("output length within budget: %d runes, %d words", runes, words),
+		}, nil
+	}
+	return Result{
+		Score:  score,
+		Passed: false,
+		Metric: m.Name(),
+		Reason: "output length budget exceeded: " + strings.Join(failures, "; "),
+	}, nil
+}
+
 func appendBudgetReason(reason string, budgetReason string) string {
 	if reason == "" {
 		return budgetReason
 	}
 	return budgetReason + "; " + reason
+}
+
+func wordCount(s string) int {
+	inWord := false
+	count := 0
+	for _, r := range s {
+		if unicode.IsSpace(r) {
+			inWord = false
+			continue
+		}
+		if !inWord {
+			count++
+			inWord = true
+		}
+	}
+	return count
+}
+
+func minFloat(a float64, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func metricName(metric Metric) string {

@@ -41,3 +41,29 @@ func TestRequiredToolsEmptyConfigPasses(t *testing.T) {
 		t.Fatalf("expected empty config pass, got %+v", result)
 	}
 }
+
+func TestRequiredToolsPatternPassesWhenMatchingToolCalled(t *testing.T) {
+	result, err := (RequiredTools{Patterns: []string{"route_*"}}).Score(context.Background(), nil, caseWithCalls(
+		[]ToolCall{{Name: "search"}, {Name: "route_plan"}},
+		nil,
+	))
+	if err != nil {
+		t.Fatalf("Score: %v", err)
+	}
+	if !result.Passed {
+		t.Fatalf("expected pattern match pass, got %+v", result)
+	}
+}
+
+func TestRequiredToolsPatternFailsWhenMissing(t *testing.T) {
+	result, err := (RequiredTools{Patterns: []string{"route_*"}}).Score(context.Background(), nil, caseWithCalls(
+		[]ToolCall{{Name: "search"}},
+		nil,
+	))
+	if err != nil {
+		t.Fatalf("Score: %v", err)
+	}
+	if result.Passed || !strings.Contains(result.Reason, "route_*") {
+		t.Fatalf("expected pattern missing failure, got %+v", result)
+	}
+}

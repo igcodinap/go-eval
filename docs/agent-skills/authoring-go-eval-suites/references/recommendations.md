@@ -30,13 +30,13 @@ When a flow appears in code but not in eval metadata, propose a named case skele
 
 Data source: JSONL token and latency fields.
 
-If average tokens or p95 latency is high, recommend `Precheck`, a smaller judge for high-volume metrics, `WithCaseFilter` for critical-only paths, or reducing overlapping metrics.
+If average tokens or p95 latency is high, recommend `Precheck`, `OutputLengthBudget`, a smaller judge for high-volume metrics, `DefaultTierFilter` / `GOEVAL_TIER` for critical-only paths, or reducing overlapping metrics.
 
 ## 6. Flakiness Signal
 
 Data source: repeated runs or benchmark output.
 
-If the same case has score standard deviation above `0.1`, recommend reducing judge temperature, tightening rubrics, adding examples, or repeating the metric when a repeat helper becomes available.
+If the same case has score standard deviation above `0.1`, recommend reducing judge temperature, tightening rubrics, adding examples, `Repeat` for single metrics, or `ScenarioRepeat` for multi-step flows.
 
 ## 7. Compound Imbalance
 

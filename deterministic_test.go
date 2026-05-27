@@ -240,3 +240,18 @@ func TestFieldCount_TrailingJSON(t *testing.T) {
 		t.Fatalf("reason missing trailing-data context: %q", r.Reason)
 	}
 }
+
+func TestContainsWithNormalizer(t *testing.T) {
+	result, err := (Contains{
+		Normalizer: ChainNormalizers(CaseFoldNormalizer(), SpanishASCIIFoldNormalizer()),
+	}).Score(context.Background(), nil, Case{
+		Output:   "La estación Pajaritos está lista",
+		Expected: "pájaritos",
+	})
+	if err != nil {
+		t.Fatalf("Score: %v", err)
+	}
+	if !result.Passed {
+		t.Fatalf("expected normalized contains to pass, got %+v", result)
+	}
+}

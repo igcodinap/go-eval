@@ -171,11 +171,16 @@ GOEVAL=1 GOEVAL_TRACE=1 go test -v -run TestFaithfulness
 | `JSONPath`         | JSON output value at configured path equals expected   | binary            |
 | `FieldCount`       | Minimum non-null top-level JSON field count            | config            |
 | `ArtifactExists`   | Named structured artifact exists                       | binary            |
+| `ArtifactNotExists` | Named structured artifact does not exist              | binary            |
 | `ArtifactJSONPath` | Artifact JSON value at configured path equals expected | binary            |
 | `ArtifactFieldCount` | Minimum non-null JSON object field count in artifact | config            |
 | `ArtifactNumberLTE` | Artifact JSON number is less than or equal to a max   | binary            |
 | `ArtifactArrayContains` | Artifact JSON array contains expected value       | binary            |
+| `ArtifactArrayNotContains` | Artifact JSON array excludes expected value  | binary            |
 | `ArtifactArrayMinLen` | Artifact JSON array has a minimum length           | binary            |
+| `ArtifactSubset`  | Artifact JSON contains a partial expected structure     | binary            |
+| `OutputLengthBudget` | Agent output stays within rune/word limits          | config            |
+| `Contract`        | Several checks grouped into one named result            | all checks        |
 | `ToolCallAccuracy` | Actual tool calls match expected calls by mode         | 1.0               |
 | `ToolCallF1`      | Precision/recall/F1 for expected tool calls             | 0.8               |
 | `RequiredTools`   | Required tool names were used                          | binary            |
@@ -210,8 +215,15 @@ r.Run(t, eval.ArtifactNumberLTE{
 r.Run(t, eval.ArtifactArrayContains{
 	Key: "route", Path: "stops", Expected: "Pajaritos",
 }, c)
+r.Run(t, eval.ArtifactArrayNotContains{
+	Key: "route", Path: "stops", Expected: "Aeropuerto",
+}, c)
 r.Run(t, eval.ArtifactArrayMinLen{
 	Key: "route", Path: "stops", MinLen: 2,
+}, c)
+r.Run(t, eval.ArtifactSubset{
+	Key:      "route",
+	Expected: json.RawMessage(`{"status":"ready"}`),
 }, c)
 ```
 
@@ -222,6 +234,20 @@ interpret artifact names. Conventionally, use stable keys such as `trace`,
 `ArtifactJSONPath.Expected` uses the same stringified comparison as `JSONPath`:
 strings compare as-is, booleans compare as `"true"` or `"false"`, numbers
 compare in JSON number form, and objects or arrays compare as compact JSON.
+`ArtifactArrayContains`, `ArtifactArrayNotContains`, and `ArtifactSubset`
+also support `[*]` wildcard paths such as `stops[*].name`.
+For `ArtifactSubset`, expected arrays are order-insensitive subsets: each
+expected element must match some actual element.
+
+Use normalizers for deterministic comparisons where casing or Spanish accents
+should not matter:
+
+```go
+fold := eval.ChainNormalizers(eval.CaseFoldNormalizer(), eval.SpanishASCIIFoldNormalizer())
+r.Run(t, eval.ArtifactArrayContains{
+	Key: "route", Path: "stops[*].name", Expected: "pájaritos", Normalizer: fold,
+}, c)
+```
 
 `examples/route_planner/` shows the intended v0.4 pattern: catch incoherent
 workflow state first, then judge final prose only if it is still useful.
@@ -233,6 +259,7 @@ set `Passed=false` when the budget is overrun:
 ```go
 r.Run(t, eval.WithTokenBudget(1200, eval.Faithfulness{Threshold: 0.8}), c)
 r.Run(t, eval.WithLatencyBudget(2*time.Second, eval.AnswerRelevancy{}), c)
+r.Run(t, eval.OutputLengthBudget{MaxRunes: 1200, MaxWords: 180}, c)
 ```
 
 ## Trajectory Checks
@@ -266,7 +293,10 @@ c := eval.Case{
 r.Run(t, eval.ToolCallAccuracy{Mode: eval.MatchStrict, MatchArgs: true}, c)
 r.Run(t, eval.ToolCallF1{MatchArgs: true, Threshold: 0.8}, c)
 r.Run(t, eval.RequiredTools{Names: []string{"search"}}, c)
-r.Run(t, eval.ForbiddenTool{Names: []string{"delete_user"}}, c)
+r.Run(t, eval.ForbiddenTool{
+	Patterns: []string{"delete_*"},
+	Except:   []string{"delete_draft"},
+}, c)
 r.Run(t, eval.StepBudget{MaxSteps: 2}, c)
 ```
 
@@ -276,6 +306,10 @@ are compared as normalized JSON; empty expected arguments are a wildcard. When
 `MatchResult` is set, expected non-empty `Result` values must match exactly;
 empty expected results are a wildcard. `StepBudget` counts flattened tool calls,
 not transcript turns.
+
+`RequiredTools` and `ForbiddenTool` support exact `Names` and glob-style
+`Patterns`. `ForbiddenTool.Except` exempts pattern matches only; exact forbidden
+names still fail.
 
 `Turn.Name`, `Turn.ToolCallID`, `ToolCall.ID`, and `ToolCall.Error` preserve
 provider transcript details for future checks and downstream reports. The
@@ -306,25 +340,31 @@ r := eval.NewRunner(
 result := r.RunScenario(t, eval.Scenario{
 	Name: "planning_to_route_ready",
 	Tier: "critical",
+	State: map[string]any{"locale": "es-CL"},
+	Repeat: eval.ScenarioRepeat{N: 3, PassRate: 2.0 / 3.0},
 	Tools: eval.NewToolRegistry("plan_route", "select_map_items"),
 	Driver: func(ctx context.Context, req eval.StepRequest) (eval.StepResult, error) {
-		return runAgentStep(ctx, req.Step.Input, req.History, req.Artifacts)
+		return runAgentStep(ctx, req.Step.Input, req.History, req.Artifacts, req.State)
 	},
 	Steps: []eval.Step{
 		{
-			Name:           "greeting",
-			Input:          "Hola",
-			ForbiddenTools: []string{"plan_route", "select_map_items"},
-			MaxToolCalls:   1,
+			Name:                  "greeting",
+			Input:                 "Hola",
+			ForbiddenToolPatterns: []string{"plan_*", "select_*"},
+			MaxToolCalls:          1,
+			Timeout:               500 * time.Millisecond,
 		},
 		{
-			Name:          "ready_route_request",
-			Input:         "Propón la ruta",
-			RequiredTools: []string{"plan_route"},
+			Name:                 "ready_route_request",
+			Input:                "Propón la ruta",
+			RequiredToolPatterns: []string{"plan_*"},
+			Timeout:              3 * time.Second,
 			Checks: []eval.Metric{
-				eval.ArtifactJSONPath{Key: "trip_plan", Path: "status", Expected: "ready"},
-				eval.ArtifactJSONPath{Key: "route", Path: "success", Expected: "true"},
-				eval.ArtifactArrayMinLen{Key: "route", Path: "stops", MinLen: 2},
+				eval.Contract{ContractName: "ready_route", Checks: []eval.Metric{
+					eval.ArtifactJSONPath{Key: "trip_plan", Path: "status", Expected: "ready"},
+					eval.ArtifactSubset{Key: "route", Expected: json.RawMessage(`{"success":true}`)},
+					eval.ArtifactArrayMinLen{Key: "route", Path: "stops", MinLen: 2},
+				}},
 			},
 		},
 	},
@@ -334,11 +374,17 @@ if !result.Passed {
 }
 ```
 
-`Scenario.Tools` is optional. When set, required, forbidden, and observed tool
-names are checked exactly and case-sensitively against the registry. Contract
-and metric failures do not stop later steps, so a failing scenario still writes
-diagnostic JSONL rows for the remaining steps. Driver errors and metric
-execution errors are fatal.
+`Scenario.Tools` is optional. When set, observed tool names are checked exactly
+against the registry. Required and forbidden checks support exact names plus
+glob-style patterns. Contract and metric failures do not stop later steps, so a
+failing scenario still writes diagnostic JSONL rows for the remaining steps.
+Driver errors and metric execution errors are fatal.
+
+Use `Scenario.State`, `StepRequest.State`, and `StepResult.State` for
+driver-to-driver runtime state. This state is copied between steps and stays out
+of JSONL unless you also place it in metadata. Use `Step.Timeout` or
+`Case.Timeout` when individual checks need tighter limits than the runner
+default.
 
 Set `Step.ExpectFail` for negative cases where a contract or check should fail,
 for example an off-topic redirect that must not satisfy a boundary-respect
@@ -402,15 +448,19 @@ r := eval.NewRunner(
 ```
 
 Redactors apply to result reasons, Compound dimension reasons, and recursive
-string metadata values. They do not affect returned `Result` values, raw
-artifacts, or `GOEVAL_TRACE` logs.
+string metadata values, including scenario summary metadata and diagnostic
+strings. They do not affect returned `Result` values, raw artifacts, or
+`GOEVAL_TRACE` logs.
 
 When `GOEVAL_RESULTS_DIR` is set, `DefaultResultSink` writes
 `results.jsonl` in that directory. Each row includes `timestamp`, `test_name`,
 `metric`, `score`, `passed`, `reason`, `tokens`, optional `prompt_tokens` and
 `completion_tokens`, `latency_ns`, optional `dimensions`, and optional
-`metadata`. `Runner` copies `Case.Metadata` into the run result unless a metric
-sets `Result.Metadata` explicitly.
+`metadata`. Scenario runs also write one `_scenario_summary` row with per-step
+tool-call names, emitted artifact keys, failed metric names, repeat counts, and
+redacted metadata. `goeval summarize` excludes summary rows from metric means.
+`Runner` copies `Case.Metadata` into the run result unless a metric sets
+`Result.Metadata` explicitly.
 
 Compare a baseline and current result file with the `compare` package:
 
@@ -446,14 +496,15 @@ goeval summarize current/results.jsonl
 `goeval compare` exits nonzero when rows regress or disappear.
 `goeval summarize` prints pass/fail and score aggregates for one result file.
 
-Use `WithCaseFilter` to run a selected slice of cases, for example a
-critical-only CI path:
+Use built-in tier filtering for CI and nightly slices:
 
 ```go
-r := eval.NewRunner(judge, eval.WithCaseFilter(func(c eval.Case) bool {
-	return c.Metadata["tier"] == "critical"
-}))
+r := eval.NewRunner(judge, eval.DefaultTierFilter())
 ```
+
+Then run `GOEVAL=1 GOEVAL_TIER=critical go test ./...`. For custom predicates,
+`WithTierFilter` and `WithCaseFilter` are ANDed. `GOEVAL_TIER` is read only
+when `DefaultTierFilter()` is installed on the runner.
 
 ## Ollama Judge Adapter
 
@@ -525,12 +576,12 @@ See `examples/openai_judge/` for a reference implementation.
 
 ## Status
 
-v0.7 adds Agent Scenario Contracts, scenario-scoped tool registries, required
+v0.8 adds scenario repeat, built-in tier filtering, per-case/per-step
+timeouts, scenario state passing, grouped contracts, pattern tool assertions,
+richer artifact/output checks, normalizers, and scenario summary JSONL rows.
+v0.7 added Agent Scenario Contracts, scenario-scoped tool registries, required
 tool checks, artifact array length checks, and result redaction before JSONL
-writes. Earlier v0.5/v0.6 trajectory work includes typed conversation turns,
-tool-call expectations, deterministic trajectory metrics, repeat/flakiness
-helpers, JSONL comparison and summaries, structured artifacts, budget wrappers,
-and opt-in result sinks. API may change before v1.0.
+writes. API may change before v1.0.
 
 ## Roadmap
 
@@ -549,7 +600,10 @@ The staged plan from AI-team review:
 3. v0.7: add `Scenario` / `Step` contracts, `Runner.RunScenario`, scenario
    tool registries, expected-failure steps, deeper artifact checks, and sink
    redaction before JSONL writes.
-4. Future: optional trace import/export, OTel/platform bridges, YAML loader
+4. v0.8: add scenario repeat, tier filtering, per-step timeouts, scenario
+   state, grouped contracts, pattern tool assertions, normalizers, wildcard
+   artifact paths, and scenario summary rows.
+5. Future: optional trace import/export, OTel/platform bridges, YAML loader
    submodule, and additional judge adapters beyond Ollama (`Genkit`,
    `Anthropic`, `Gemini`), still outside the dependency-free core.
 

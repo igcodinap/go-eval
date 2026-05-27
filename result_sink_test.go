@@ -39,6 +39,12 @@ func (s *recordingSink) last() RunResult {
 	return s.results[len(s.results)-1]
 }
 
+func (s *recordingSink) all() []RunResult {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]RunResult(nil), s.results...)
+}
+
 func TestRunner_WritesToSinkWhenConfigured(t *testing.T) {
 	t.Setenv(EnvVar, "1")
 
@@ -374,5 +380,45 @@ func TestRunner_RedactsSinkResult(t *testing.T) {
 		got.Metadata["trip_plan_id"] != "trip-123" ||
 		originalMetadata["trip_plan_id"] != "trip-123" {
 		t.Fatalf("redaction mutated original data: got=%+v original=%+v", got, originalMetadata)
+	}
+}
+
+func TestRunScenario_RedactsScenarioSummary(t *testing.T) {
+	t.Setenv(EnvVar, "1")
+
+	sink := &recordingSink{}
+	r := NewRunner(
+		&MockJudge{},
+		WithResultSink(sink),
+		WithRedactors(UUIDRedactor(), FieldRedactor("trip_plan_id")),
+	)
+	got := r.RunScenario(t, Scenario{
+		Name:     "redacted_summary",
+		Metadata: map[string]any{"trip_plan_id": "trip-123"},
+		Driver: func(ctx context.Context, req StepRequest) (StepResult, error) {
+			return StepResult{
+				Turns: []Turn{{ToolCalls: []ToolCall{{Name: "lookup-550e8400-e29b-41d4-a716-446655440000"}}}},
+				Artifacts: map[string]json.RawMessage{
+					"artifact-550e8400-e29b-41d4-a716-446655440000": json.RawMessage(`{"ok":true}`),
+				},
+			}, nil
+		},
+		Steps: []Step{{Name: "one"}},
+	})
+	if !got.Passed {
+		t.Fatalf("expected scenario pass, got %+v", got)
+	}
+
+	summary := sink.last()
+	if summary.Kind != runResultKindScenarioSummary || summary.ScenarioSummary == nil {
+		t.Fatalf("expected scenario summary row, got %+v", summary)
+	}
+	if summary.ScenarioSummary.Metadata["trip_plan_id"] != "[REDACTED]" {
+		t.Fatalf("summary metadata was not redacted: %+v", summary.ScenarioSummary.Metadata)
+	}
+	step := summary.ScenarioSummary.Steps[0]
+	if step.ToolCalls[0] != "lookup-[REDACTED_UUID]" ||
+		step.ArtifactKeys[0] != "artifact-[REDACTED_UUID]" {
+		t.Fatalf("summary strings were not redacted: %+v", step)
 	}
 }

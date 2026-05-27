@@ -56,6 +56,9 @@ func Summarize(results []eval.RunResult) ResultsSummary {
 	accumulators := map[string]*metricAccumulator{}
 
 	for _, result := range results {
+		if isScenarioSummaryRow(result) {
+			continue
+		}
 		summary.Total++
 		if result.Passed {
 			summary.Passed++
@@ -78,6 +81,10 @@ func Summarize(results []eval.RunResult) ResultsSummary {
 		summary.ByMetric[metric] = acc.summary()
 	}
 	return summary
+}
+
+func isScenarioSummaryRow(result eval.RunResult) bool {
+	return result.Kind == "scenario_summary" || result.Metric == "_scenario_summary"
 }
 
 func (a *metricAccumulator) add(result eval.RunResult) {

@@ -180,6 +180,105 @@ func TestRunner_WithCaseFilterRunsMatchedCase(t *testing.T) {
 	}
 }
 
+func TestRunner_WithTierFilterSkipsUnmatchedCase(t *testing.T) {
+	t.Setenv(EnvVar, "1")
+	t.Setenv(TierEnvVar, "")
+
+	metric := &countingMetric{
+		name:   "X",
+		result: Result{Score: 1, Passed: true, Metric: "X"},
+	}
+	tb := &recordingTB{}
+	r := NewRunner(&MockJudge{}, WithTierFilter("critical"))
+
+	got := r.Run(tb, metric, Case{Metadata: map[string]any{"tier": "extended"}})
+
+	if !tb.skipped || metric.calls != 0 {
+		t.Fatalf("expected tier filter skip, skipped=%v calls=%d result=%+v", tb.skipped, metric.calls, got)
+	}
+}
+
+func TestRunner_TierEnvSupportsMultipleTiers(t *testing.T) {
+	t.Setenv(EnvVar, "1")
+	t.Setenv(TierEnvVar, "critical, standard")
+
+	metric := &countingMetric{
+		name:   "X",
+		result: Result{Score: 1, Passed: true, Metric: "X"},
+	}
+	tb := &recordingTB{}
+	r := NewRunner(&MockJudge{}, DefaultTierFilter())
+
+	got := r.Run(tb, metric, Case{Metadata: map[string]any{"tier": "standard"}})
+
+	if tb.skipped || metric.calls != 1 || !got.Passed {
+		t.Fatalf("expected tier env match, skipped=%v calls=%d result=%+v", tb.skipped, metric.calls, got)
+	}
+}
+
+func TestRunner_TierEnvRequiresDefaultTierFilter(t *testing.T) {
+	t.Setenv(EnvVar, "1")
+	t.Setenv(TierEnvVar, "critical")
+
+	metric := &countingMetric{
+		name:   "X",
+		result: Result{Score: 1, Passed: true, Metric: "X"},
+	}
+	tb := &recordingTB{}
+	r := NewRunner(&MockJudge{})
+
+	got := r.Run(tb, metric, Case{Metadata: map[string]any{"tier": "extended"}})
+
+	if tb.skipped || metric.calls != 1 || !got.Passed {
+		t.Fatalf("tier env should be opt-in through DefaultTierFilter, skipped=%v calls=%d result=%+v", tb.skipped, metric.calls, got)
+	}
+}
+
+func TestRunner_TierFilterAndCaseFilterMustBothPass(t *testing.T) {
+	t.Setenv(EnvVar, "1")
+	t.Setenv(TierEnvVar, "")
+
+	metric := &countingMetric{
+		name:   "X",
+		result: Result{Score: 1, Passed: true, Metric: "X"},
+	}
+	tb := &recordingTB{}
+	r := NewRunner(
+		&MockJudge{},
+		WithTierFilter("critical"),
+		WithCaseFilter(func(c Case) bool {
+			return c.Metadata["flow"] == "route"
+		}),
+	)
+
+	_ = r.Run(tb, metric, Case{Metadata: map[string]any{"tier": "critical", "flow": "billing"}})
+
+	if !tb.skipped || metric.calls != 0 {
+		t.Fatalf("expected ANDed filters to skip, skipped=%v calls=%d", tb.skipped, metric.calls)
+	}
+}
+
+func TestRunner_CaseTimeoutOverridesRunnerTimeout(t *testing.T) {
+	t.Setenv(EnvVar, "1")
+
+	var deadline time.Time
+	metric := funcMetric(func(ctx context.Context, j Judge, c Case) (Result, error) {
+		var ok bool
+		deadline, ok = ctx.Deadline()
+		if !ok {
+			t.Fatalf("expected deadline")
+		}
+		return Result{Score: 1, Passed: true, Metric: "X"}, nil
+	})
+
+	start := time.Now()
+	_ = NewRunner(&MockJudge{}, WithTimeout(time.Hour)).Run(t, metric, Case{Timeout: 20 * time.Millisecond})
+
+	if deadline.Sub(start) > time.Second {
+		t.Fatalf("case timeout did not override runner timeout: deadline=%s start=%s", deadline, start)
+	}
+}
+
 type funcMetric func(ctx context.Context, j Judge, c Case) (Result, error)
 
 func (f funcMetric) Name() string { return "FuncMetric" }

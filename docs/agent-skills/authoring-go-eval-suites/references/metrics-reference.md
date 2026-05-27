@@ -121,7 +121,11 @@ For LLM-judge metrics, "typically needed fields" are not hard-validated by the l
 - Required fields: `Case.Artifacts`, configured artifact key, and any configured JSON path.
 - Score: deterministic binary pass/fail, except field count and array length checks can report partial ratios.
 - Metrics: `ArtifactExists`, `ArtifactJSONPath`, `ArtifactFieldCount`,
-  `ArtifactNumberLTE`, `ArtifactArrayContains`, `ArtifactArrayMinLen`.
+  `ArtifactNumberLTE`, `ArtifactArrayContains`, `ArtifactArrayNotContains`,
+  `ArtifactArrayMinLen`, `ArtifactNotExists`, and `ArtifactSubset`.
+- Matching: contains/not-contains/subset checks support `[*]` wildcard artifact
+  paths and optional normalizers for case or Spanish accent folding.
+  `ArtifactSubset` treats expected arrays as order-insensitive subsets.
 - Use for: agent state, route plans, planner outputs, budgets, and other
   structured artifacts that should be checked before judge-backed metrics.
 - Avoid for: semantic quality of final prose; pair with `GEval` or `Compound`.
@@ -153,8 +157,9 @@ For LLM-judge metrics, "typically needed fields" are not hard-validated by the l
 
 ## RequiredTools
 
-- Required fields: `Case.Turns`, configured `Names`.
-- Score: `1` when every configured tool name appears at least once, else `0`.
+- Required fields: `Case.Turns`, configured `Names` or `Patterns`.
+- Score: `1` when every configured tool name and pattern appears at least once, else `0`.
+- Patterns use stdlib glob syntax, not regular expressions.
 - Default threshold: binary pass.
 - Use for: must-call behavior in tool-use or scenario steps.
 - Avoid for: validating order or arguments; use `ToolCallAccuracy` when those matter.
@@ -162,8 +167,10 @@ For LLM-judge metrics, "typically needed fields" are not hard-validated by the l
 
 ## ForbiddenTool
 
-- Required fields: `Case.Turns`, configured `Names`.
-- Score: `1` when none of the configured tool names appear, else `0`.
+- Required fields: `Case.Turns`, configured `Names` or `Patterns`.
+- Score: `1` when none of the configured tool names or non-excepted pattern
+  matches appear, else `0`.
+- Patterns use stdlib glob syntax, not regular expressions.
 - Default threshold: binary pass.
 - Use for: policy and safety gates on tool access.
 - Avoid for: allow-list behavior; use `ToolCallAccuracy` or a custom deterministic metric.
@@ -187,6 +194,13 @@ For LLM-judge metrics, "typically needed fields" are not hard-validated by the l
 - Avoid for: deterministic metrics unless you are testing wrapper behavior.
 - Anti-pattern: using repeats to hide unstable prompts instead of diagnosing them.
 
+## Contract
+
+- Required fields: `ContractName` and one or more checks.
+- Score: mean score across checks; pass/fail requires every check to pass.
+- Use for: grouped deterministic checks that should produce one named JSONL row.
+- Avoid for: unrelated checks that deserve independent triage.
+
 ## Scenario Contracts
 
 - Required fields: `Scenario.Name`, `Scenario.Driver`, and ordered `Steps`.
@@ -194,6 +208,10 @@ For LLM-judge metrics, "typically needed fields" are not hard-validated by the l
   results pass after any `ExpectFail` inversion.
 - Use for: multi-turn agent flows with step-specific required/forbidden tools,
   tool-call budgets, accumulated artifacts, and expected negative cases.
+- `ScenarioRepeat` repeats the whole scenario; `Scenario.State` and
+  `StepResult.State` carry driver runtime state between steps.
+- Scenario result sinks include one `_scenario_summary` row with per-step tool
+  calls, emitted artifact keys, failed metrics, and repeat counts.
 - Avoid for: single-turn cases where plain `Runner.Run` with a `Case` is clearer.
 - Anti-pattern: putting app orchestration into custom metrics instead of using
   the scenario driver to collect turns and artifacts.

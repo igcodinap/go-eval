@@ -266,6 +266,9 @@ func CompareWithOptions(baseline []eval.RunResult, current []eval.RunResult, opt
 func indexResults(results []eval.RunResult, identify IdentityFunc) map[Identity][]eval.RunResult {
 	indexed := make(map[Identity][]eval.RunResult)
 	for _, result := range results {
+		if isScenarioSummaryRow(result) {
+			continue
+		}
 		id := identify(result)
 		indexed[id] = append(indexed[id], result)
 	}
