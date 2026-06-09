@@ -265,6 +265,80 @@ func TestCompareSkipsScenarioSummaryRows(t *testing.T) {
 	}
 }
 
+func TestCompareWithPolicyAppliesPrecedenceAndDecisions(t *testing.T) {
+	baseline := []eval.RunResult{
+		{
+			TestName: "TestEval",
+			Metric:   "Faithfulness",
+			Score:    0.9,
+			Passed:   true,
+			Metadata: map[string]any{"case_id": "same", "tier": "critical"},
+		},
+	}
+	current := []eval.RunResult{
+		{
+			TestName: "TestEval",
+			Metric:   "Faithfulness",
+			Score:    0.87,
+			Passed:   true,
+			Metadata: map[string]any{"case_id": "same", "tier": "critical"},
+		},
+	}
+
+	report := CompareWithPolicy(baseline, current, Policy{
+		CaseIDKey: "case_id",
+		Default: MetricPolicy{
+			ScoreTolerance: floatPtr(0.2),
+		},
+		Tiers: map[string]MetricPolicy{
+			"critical": {ScoreTolerance: floatPtr(0.1)},
+		},
+		Metrics: map[string]MetricPolicy{
+			"Faithfulness": {ScoreTolerance: floatPtr(0.05)},
+		},
+		MetricTiers: map[string]map[string]MetricPolicy{
+			"Faithfulness": {
+				"critical": {ScoreTolerance: floatPtr(0.01)},
+			},
+		},
+	})
+
+	entry := findEntry(t, report, "TestEval", "same", "Faithfulness")
+	if entry.Status != StatusRegressed {
+		t.Fatalf("expected metric+tier tolerance to regress, got %+v", entry)
+	}
+	if !entry.Decision.Failed || entry.Decision.Reason != "score_regression" {
+		t.Fatalf("unexpected decision: %+v", entry.Decision)
+	}
+	if report.Summary.PolicyFailures != 1 {
+		t.Fatalf("policy failures = %d, want 1", report.Summary.PolicyFailures)
+	}
+}
+
+func TestCompareWithPolicyCanDisableRegressionAndMissingFailures(t *testing.T) {
+	baseline := []eval.RunResult{
+		{TestName: "TestEval/missing", Metric: "Faithfulness", Score: 1, Passed: true},
+		{TestName: "TestEval/regress", Metric: "Faithfulness", Score: 1, Passed: true},
+	}
+	current := []eval.RunResult{
+		{TestName: "TestEval/regress", Metric: "Faithfulness", Score: 0, Passed: false},
+	}
+
+	report := CompareWithPolicy(baseline, current, Policy{
+		Default: MetricPolicy{
+			FailOnMissing:    boolPtr(false),
+			FailOnRegression: boolPtr(false),
+		},
+	})
+
+	if report.Summary.Missing != 1 || report.Summary.Regressed != 1 {
+		t.Fatalf("unexpected status summary: %+v", report.Summary)
+	}
+	if report.Summary.PolicyFailures != 0 {
+		t.Fatalf("policy failures = %d, want 0", report.Summary.PolicyFailures)
+	}
+}
+
 func findEntry(t *testing.T, report Report, testName string, caseName string, metric string) Entry {
 	t.Helper()
 	for _, entry := range report.Entries {
@@ -287,6 +361,14 @@ func findDimension(t *testing.T, entry Entry, name string) DimensionEntry {
 	}
 	t.Fatalf("dimension not found: %q in %+v", name, entry.Dimensions)
 	return DimensionEntry{}
+}
+
+func boolPtr(value bool) *bool {
+	return &value
+}
+
+func floatPtr(value float64) *float64 {
+	return &value
 }
 
 func assertFloat(t *testing.T, got float64, want float64) {

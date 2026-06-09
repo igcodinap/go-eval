@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -59,6 +60,212 @@ func TestRunTestSetsGOEVALAndForwardsArgs(t *testing.T) {
 	}
 }
 
+func TestRunTestProfileLoadsManifestAndForwardsEnv(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "goeval.json")
+	resultsDir := filepath.Join(dir, "results")
+	if err := os.WriteFile(configPath, []byte(`{
+		"profiles": {
+			"pr": {
+				"packages": ["./..."],
+				"tiers": ["critical", "standard"],
+				"results_dir": "`+filepath.ToSlash(resultsDir)+`"
+			}
+		}
+	}`), 0o644); err != nil {
+		t.Fatalf("WriteFile config: %v", err)
+	}
+	recorder := &recordingGoCommand{code: 0}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(
+		context.Background(),
+		[]string{"test", "--profile", "pr", "--config", configPath, "-run", "TestEval"},
+		[]string{"PATH=/bin", "GOEVAL=0", "GOEVAL_TIER=old", "GOEVAL_RESULTS_DIR=old"},
+		nil,
+		&stdout,
+		&stderr,
+		recorder.run,
+	)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr=%q", code, stderr.String())
+	}
+	wantArgs := []string{"test", "./...", "-run", "TestEval"}
+	if !reflect.DeepEqual(recorder.args, wantArgs) {
+		t.Fatalf("args = %#v, want %#v", recorder.args, wantArgs)
+	}
+	if got, _ := envValue(recorder.env, "GOEVAL_TIER"); got != "critical,standard" {
+		t.Fatalf("GOEVAL_TIER = %q", got)
+	}
+	if got, _ := envValue(recorder.env, "GOEVAL_RESULTS_DIR"); got != resultsDir {
+		t.Fatalf("GOEVAL_RESULTS_DIR = %q, want %q", got, resultsDir)
+	}
+}
+
+func TestRunTestProfileDefaultsToAllPackages(t *testing.T) {
+	configPath := writeConfigFile(t, `{
+		"profiles": {
+			"pr": {}
+		}
+	}`)
+	recorder := &recordingGoCommand{code: 0}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(context.Background(), []string{"test", "--profile", "pr", "--config", configPath}, []string{"GOEVAL_TIER=old", "GOEVAL_RESULTS_DIR=old"}, nil, &stdout, &stderr, recorder.run)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr=%q", code, stderr.String())
+	}
+	wantArgs := []string{"test", "./..."}
+	if !reflect.DeepEqual(recorder.args, wantArgs) {
+		t.Fatalf("args = %#v, want %#v", recorder.args, wantArgs)
+	}
+	if _, count := envValue(recorder.env, "GOEVAL_TIER"); count != 0 {
+		t.Fatalf("GOEVAL_TIER should be unset in %#v", recorder.env)
+	}
+	if _, count := envValue(recorder.env, "GOEVAL_RESULTS_DIR"); count != 0 {
+		t.Fatalf("GOEVAL_RESULTS_DIR should be unset in %#v", recorder.env)
+	}
+}
+
+func TestRunTestProfileReportsUnknownProfile(t *testing.T) {
+	configPath := writeConfigFile(t, `{
+		"profiles": {
+			"pr": {}
+		}
+	}`)
+	recorder := &recordingGoCommand{code: 0}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(context.Background(), []string{"test", "--profile", "nightly", "--config", configPath}, nil, nil, &stdout, &stderr, recorder.run)
+
+	if code != 2 {
+		t.Fatalf("exit code = %d, want 2", code)
+	}
+	if recorder.calls != 0 {
+		t.Fatalf("go command should not run for unknown profile")
+	}
+	if !strings.Contains(stderr.String(), `profile "nightly" not found`) {
+		t.Fatalf("stderr missing unknown profile message:\n%s", stderr.String())
+	}
+}
+
+func TestRunTestProfileSkipsWhenPrerequisiteMissing(t *testing.T) {
+	t.Setenv("GOEVAL_TEST_MISSING_KEY", "")
+	configPath := writeConfigFile(t, `{
+		"profiles": {
+			"google": {
+				"packages": ["./..."],
+				"prerequisites": [{"type": "env", "name": "GOEVAL_TEST_MISSING_KEY"}],
+				"missing_prerequisite": "skip"
+			}
+		}
+	}`)
+	recorder := &recordingGoCommand{code: 0}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(context.Background(), []string{"test", "--profile", "google", "--config", configPath}, nil, nil, &stdout, &stderr, recorder.run)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr=%q", code, stderr.String())
+	}
+	if recorder.calls != 0 {
+		t.Fatalf("go command should not run when prerequisite is missing")
+	}
+	if !strings.Contains(stdout.String(), `goeval profile "google" skipped: missing prerequisites`) ||
+		!strings.Contains(stdout.String(), "env GOEVAL_TEST_MISSING_KEY") {
+		t.Fatalf("stdout missing prerequisite summary:\n%s", stdout.String())
+	}
+}
+
+func TestRunTestProfileFailsWhenPrerequisiteMissingAndConfigured(t *testing.T) {
+	t.Setenv("GOEVAL_TEST_MISSING_KEY", "")
+	configPath := writeConfigFile(t, `{
+		"profiles": {
+			"release": {
+				"packages": ["./..."],
+				"prerequisites": [{"type": "env", "name": "GOEVAL_TEST_MISSING_KEY"}],
+				"missing_prerequisite": "fail"
+			}
+		}
+	}`)
+	recorder := &recordingGoCommand{code: 0}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(context.Background(), []string{"test", "--profile", "release", "--config", configPath}, nil, nil, &stdout, &stderr, recorder.run)
+
+	if code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+	if recorder.calls != 0 {
+		t.Fatalf("go command should not run when prerequisite is missing")
+	}
+	if !strings.Contains(stderr.String(), `goeval profile "release" failed: missing prerequisites`) {
+		t.Fatalf("stderr missing prerequisite failure:\n%s", stderr.String())
+	}
+}
+
+func TestLoadManifestRejectsInvalidPrerequisite(t *testing.T) {
+	configPath := writeConfigFile(t, `{
+		"profiles": {
+			"bad": {
+				"prerequisites": [{"type": "wat", "name": "NOPE"}]
+			}
+		}
+	}`)
+
+	_, _, err := loadManifest(configPath, true)
+	if err == nil || !strings.Contains(err.Error(), `invalid prerequisite type "wat"`) {
+		t.Fatalf("expected invalid prerequisite error, got %v", err)
+	}
+}
+
+func TestLoadManifestRejectsMalformedPolicy(t *testing.T) {
+	configPath := writeConfigFile(t, `{
+		"compare": {
+			"default": {"score_tolerance": -0.1}
+		}
+	}`)
+
+	_, _, err := loadManifest(configPath, true)
+	if err == nil || !strings.Contains(err.Error(), "score_tolerance must be non-negative") {
+		t.Fatalf("expected malformed policy error, got %v", err)
+	}
+}
+
+func TestManifestPrerequisitesSupportFileAndTCP(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "ready.txt")
+	if err := os.WriteFile(path, []byte("ok"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	defer func() { _ = listener.Close() }()
+	go func() {
+		conn, acceptErr := listener.Accept()
+		if acceptErr == nil {
+			_ = conn.Close()
+		}
+	}()
+
+	missing := checkManifestPrerequisites(context.Background(), []manifestPrerequisite{
+		{Type: "file", Path: path},
+		{Type: "tcp", Name: "local", Address: listener.Addr().String()},
+	})
+
+	if len(missing) != 0 {
+		t.Fatalf("expected prerequisites to pass, got %+v", missing)
+	}
+}
+
 func TestRunCompareReportsRegressionAndFails(t *testing.T) {
 	baselinePath, currentPath := writeCompareFiles(t,
 		`{"test_name":"TestEval/regress","metric":"Faithfulness","score":0.9,"passed":true,"tokens":10,"latency_ns":100}`+"\n",
@@ -86,6 +293,71 @@ func TestRunCompareReportsRegressionAndFails(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("stdout missing %q in:\n%s", want, out)
 		}
+	}
+}
+
+func TestRunCompareWithPolicyFlagsAndJSON(t *testing.T) {
+	baselinePath, currentPath := writeCompareFiles(t,
+		`{"test_name":"TestEval","metric":"Faithfulness","score":0.9,"passed":true,"metadata":{"case_id":"a"}}`+"\n",
+		`{"test_name":"TestEval","metric":"Faithfulness","score":0.89,"passed":true,"metadata":{"case_id":"a"}}`+"\n",
+	)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(context.Background(), []string{
+		"compare",
+		"--case-id-key", "case_id",
+		"--score-tolerance", "0.02",
+		"--format", "json",
+		baselinePath,
+		currentPath,
+	}, nil, nil, &stdout, &stderr, nil)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr=%q stdout=%q", code, stderr.String(), stdout.String())
+	}
+	out := stdout.String()
+	if !strings.Contains(out, `"Unchanged": 1`) || !strings.Contains(out, `"CaseName": "a"`) {
+		t.Fatalf("json output missing policy comparison details:\n%s", out)
+	}
+}
+
+func TestRunCompareLoadsPolicyFile(t *testing.T) {
+	baselinePath, currentPath := writeCompareFiles(t,
+		`{"test_name":"TestEval","metric":"Faithfulness","score":0.9,"passed":true}`+"\n",
+		`{"test_name":"TestEval","metric":"Faithfulness","score":0.89,"passed":true}`+"\n",
+	)
+	policyPath := writeConfigFile(t, `{
+		"default": {"score_tolerance": 0.02}
+	}`)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(context.Background(), []string{"compare", "--policy", policyPath, baselinePath, currentPath}, nil, nil, &stdout, &stderr, nil)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr=%q stdout=%q", code, stderr.String(), stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "unchanged=1") {
+		t.Fatalf("stdout missing unchanged summary:\n%s", stdout.String())
+	}
+}
+
+func TestRunCompareCanDisableRegressionFailure(t *testing.T) {
+	baselinePath, currentPath := writeCompareFiles(t,
+		`{"test_name":"TestEval","metric":"Faithfulness","score":0.9,"passed":true}`+"\n",
+		`{"test_name":"TestEval","metric":"Faithfulness","score":0.1,"passed":false}`+"\n",
+	)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(context.Background(), []string{"compare", "--fail-on-regression=false", baselinePath, currentPath}, nil, nil, &stdout, &stderr, nil)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr=%q stdout=%q", code, stderr.String(), stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "regressed\tTestEval\tmetric=Faithfulness") {
+		t.Fatalf("stdout missing regressed status:\n%s", stdout.String())
 	}
 }
 
@@ -190,6 +462,17 @@ func writeResultFile(t *testing.T, content string) string {
 	path := filepath.Join(dir, "results.jsonl")
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("WriteFile results: %v", err)
+	}
+	return path
+}
+
+func writeConfigFile(t *testing.T, content string) string {
+	t.Helper()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "goeval.json")
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile config: %v", err)
 	}
 	return path
 }

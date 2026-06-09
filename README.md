@@ -496,6 +496,76 @@ goeval summarize current/results.jsonl
 `goeval compare` exits nonzero when rows regress or disappear.
 `goeval summarize` prints pass/fail and score aggregates for one result file.
 
+## Eval profiles and prerequisites
+
+Use `goeval.json` when a repo has different eval run shapes for PRs, nightly
+runs, provider-specific checks, or release gates:
+
+```json
+{
+  "profiles": {
+    "pr": {
+      "packages": ["./..."],
+      "tiers": ["critical"],
+      "results_dir": ".goeval/pr"
+    },
+    "google": {
+      "packages": ["./..."],
+      "tiers": ["critical", "standard"],
+      "results_dir": ".goeval/google",
+      "prerequisites": [
+        {"type": "env", "name": "GEMINI_API_KEY"},
+        {"type": "env", "name": "GOOGLE_ROUTES_API_KEY"}
+      ],
+      "missing_prerequisite": "skip"
+    }
+  },
+  "compare": {
+    "case_id_key": "case_id",
+    "default": {
+      "score_tolerance": 0.02,
+      "fail_on_missing": true,
+      "fail_on_regression": true
+    }
+  }
+}
+```
+
+Run a profile:
+
+```bash
+goeval test --profile pr
+goeval test --profile google --config goeval.json -run Route
+```
+
+Profiles set `GOEVAL=1`, optionally set `GOEVAL_TIER` and
+`GOEVAL_RESULTS_DIR`, preflight manifest prerequisites, and then delegate to
+`go test`. Missing prerequisites skip the profile by default; set
+`"missing_prerequisite": "fail"` for release-style gates.
+
+Test code can also declare prerequisites directly:
+
+```go
+eval.Require(t,
+	eval.Env("GEMINI_API_KEY"),
+	eval.File("testdata/routes.json"),
+	eval.TCP("local routing db", "127.0.0.1:5432"),
+)
+```
+
+Compare can use a standalone policy file or the `compare` section from
+`goeval.json`:
+
+```bash
+goeval compare --policy goeval.json --format json old/results.jsonl new/results.jsonl
+goeval compare --case-id-key case_id --score-tolerance 0.02 old.jsonl new.jsonl
+goeval compare --fail-on-regression=false old.jsonl new.jsonl
+```
+
+`goeval summarize` now includes pass rate, p95 latency/tokens, scenario run
+totals, metadata groupings in the `compare` package, and flaky repeated-case
+detection through `compare.SummarizeWithOptions`.
+
 Use built-in tier filtering for CI and nightly slices:
 
 ```go

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Eval operations layer with `goeval.json` profiles, manifest prerequisites,
+  `goeval test --profile`, and `--config` support
+- Prerequisite helpers: `Require`, `Env`, `File`, `TCP`, and `Func`
+- Compare policies with per-metric/per-tier score tolerances, case ID matching,
+  JSON output, and `goeval compare` policy flags
+- Reliability summaries with pass rates, p95 latency/tokens, metadata grouping,
+  flaky identity detection, and scenario run totals
+
 ## [v0.8.0] - 2026-05-27
 
 ### Added

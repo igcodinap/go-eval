@@ -10,37 +10,75 @@ import (
 
 func TestSummarizeAggregatesByMetric(t *testing.T) {
 	summary := Summarize([]eval.RunResult{
-		{Metric: "Faithfulness", Score: 1.0, Passed: true, Tokens: 10, LatencyNS: 100},
-		{Metric: "Faithfulness", Score: 0.5, Passed: false, Tokens: 30, LatencyNS: 300},
+		{Metric: "Faithfulness", Score: 1.0, Passed: true, Tokens: 10, LatencyNS: 100, Metadata: map[string]any{"tier": "critical", "flow": "rag.answer", "dataset": "smoke/v1", "case_id": "a"}},
+		{Metric: "Faithfulness", Score: 0.5, Passed: false, Tokens: 30, LatencyNS: 300, Metadata: map[string]any{"tier": "critical", "flow": "rag.answer", "dataset": "smoke/v1", "case_id": "b"}},
 		{Metric: "ToolCallF1", Score: 0.75, Passed: true, Tokens: 0, LatencyNS: 0},
 	})
 
-	if summary.Total != 3 || summary.Passed != 2 || summary.Failed != 1 {
+	if summary.Total != 3 || summary.Passed != 2 || summary.Failed != 1 || summary.PassRate != 2.0/3.0 {
 		t.Fatalf("unexpected summary: %+v", summary)
 	}
 	faithfulness := summary.ByMetric["Faithfulness"]
 	if faithfulness.Count != 2 || faithfulness.Passed != 1 || faithfulness.Failed != 1 {
 		t.Fatalf("unexpected metric summary: %+v", faithfulness)
 	}
-	if faithfulness.MeanScore != 0.75 || faithfulness.MeanTokens != 20 || faithfulness.MeanLatency != 200 {
+	if faithfulness.MeanScore != 0.75 || faithfulness.MeanTokens != 20 || faithfulness.MeanLatency != 200 ||
+		faithfulness.P95Tokens != 30 || faithfulness.P95Latency != 300 {
 		t.Fatalf("unexpected metric means: %+v", faithfulness)
 	}
 	if faithfulness.MinScore != 0.5 || faithfulness.MaxScore != 1.0 {
 		t.Fatalf("unexpected min/max: %+v", faithfulness)
+	}
+	if summary.ByTier["critical"].Count != 2 ||
+		summary.ByFlow["rag.answer"].Count != 2 ||
+		summary.ByDataset["smoke/v1"].Count != 2 ||
+		len(summary.ByCase) != 3 {
+		t.Fatalf("unexpected grouped summaries: tiers=%+v flows=%+v datasets=%+v cases=%+v", summary.ByTier, summary.ByFlow, summary.ByDataset, summary.ByCase)
 	}
 }
 
 func TestSummarizeSkipsScenarioSummaryRows(t *testing.T) {
 	summary := Summarize([]eval.RunResult{
 		{Metric: "Faithfulness", Score: 1.0, Passed: true, Tokens: 10},
-		{Kind: "scenario_summary", Metric: "_scenario_summary", Score: 1.0, Passed: true},
+		{
+			Kind:   "scenario_summary",
+			Metric: "_scenario_summary",
+			Score:  1.0,
+			Passed: true,
+			ScenarioSummary: &eval.ScenarioSummary{
+				Passed:   true,
+				RunCount: 3,
+				PassRuns: 2,
+			},
+		},
 	})
 
 	if summary.Total != 1 || summary.Passed != 1 {
 		t.Fatalf("scenario summary rows should not count as metric rows: %+v", summary)
 	}
+	if summary.ScenarioTotal != 1 || summary.ScenarioPassed != 1 ||
+		summary.ScenarioRuns != 3 || summary.ScenarioPassRuns != 2 {
+		t.Fatalf("scenario summary should be tracked separately: %+v", summary)
+	}
 	if _, ok := summary.ByMetric["_scenario_summary"]; ok {
 		t.Fatalf("scenario summary metric should be skipped: %+v", summary.ByMetric)
+	}
+}
+
+func TestSummarizeWithOptionsReportsFlakyIdentities(t *testing.T) {
+	summary := SummarizeWithOptions([]eval.RunResult{
+		{TestName: "TestEval", Metric: "Faithfulness", Score: 0.9, Passed: true, Metadata: map[string]any{"case_id": "a"}},
+		{TestName: "TestEval", Metric: "Faithfulness", Score: 0.4, Passed: false, Metadata: map[string]any{"case_id": "a"}},
+		{TestName: "TestEval", Metric: "Faithfulness", Score: 0.91, Passed: true, Metadata: map[string]any{"case_id": "b"}},
+		{TestName: "TestEval", Metric: "Faithfulness", Score: 0.9, Passed: true, Metadata: map[string]any{"case_id": "b"}},
+	}, SummaryOptions{FlakyScoreStdDev: 0.2})
+
+	if len(summary.Flaky) != 1 {
+		t.Fatalf("expected one flaky identity, got %+v", summary.Flaky)
+	}
+	flaky := summary.Flaky[0]
+	if flaky.Count != 2 || flaky.Passed != 1 || flaky.Failed != 1 || !flaky.MixedPass {
+		t.Fatalf("unexpected flaky summary: %+v", flaky)
 	}
 }
 
