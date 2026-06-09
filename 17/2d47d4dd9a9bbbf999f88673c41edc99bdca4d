@@ -1,0 +1,31 @@
+agent_metrics_test.go
+  s_7d84120b8b2ae1::t_ad87b4a88300b1 68-82
+CHANGELOG.md
+  s_7d84120b8b2ae1::t_5b1f4265db4eee 36-37,44-45
+compare/report.go
+  s_7d84120b8b2ae1::t_e7605b1088e1d1 7,211
+docs/agent-skills/authoring-go-eval-suites/references/metrics-reference.md
+  s_7d84120b8b2ae1::t_7e02d7eee72b81 137-138,144-145,152-153,158-159,166-167,171-172,179-180,185-186,193-194,197-198
+compare/report_test.go
+  s_7d84120b8b2ae1::t_b1b6e3f1819692 33,36-37,45-46
+scenario_test.go
+  s_7d84120b8b2ae1::t_dccac73c9c6ff5 373-398
+scenario.go
+  s_7d84120b8b2ae1::t_46f8dfb1682774 701-713,734-743
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "172d47d4dd9a9bbbf999f88673c41edc99bdca4d",
+  "prompts": {},
+  "sessions": {
+    "s_7d84120b8b2ae1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eaa10-0175-7122-905b-fd580e386a16",
+        "model": "gpt-5.5"
+      },
+      "human_author": "igcodinap <igcodinap@users.noreply.github.com>"
+    }
+  }
+}
