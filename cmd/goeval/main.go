@@ -23,7 +23,7 @@ type goCommandFunc func(context.Context, []string, []string, io.Reader, io.Write
 const usage = `Usage:
   goeval test [--profile <name>] [--config <path>] [go test args...]
   goeval compare [--policy <path>] [--config <path>] [--case-id-key <key>] [--score-tolerance <float>] [--fail-on-regression=<bool>] [--format text|json] <baseline.jsonl> <current.jsonl>
-  goeval summarize <results.jsonl>
+  goeval summarize [--policy <path>] [--config <path>] [--case-id-key <key>] <results.jsonl>
   goeval version
 
 Commands:
@@ -197,12 +197,24 @@ func runCompare(args []string, stdout io.Writer, stderr io.Writer) int {
 }
 
 func runSummarize(args []string, stdout io.Writer, stderr io.Writer) int {
-	if len(args) != 1 {
-		writef(stderr, "usage: goeval summarize <results.jsonl>\n")
+	parsed, err := parseSummarizeArgs(args)
+	if err != nil {
+		writef(stderr, "summarize: %v\n", err)
 		return 2
 	}
 
-	summary, err := compare.SummarizeFile(args[0])
+	policy, usePolicy, err := loadSummaryPolicy(parsed)
+	if err != nil {
+		writef(stderr, "summarize: %v\n", err)
+		return 1
+	}
+
+	var summary compare.ResultsSummary
+	if usePolicy {
+		summary, err = compare.SummarizeFileWithPolicy(parsed.resultPath, policy)
+	} else {
+		summary, err = compare.SummarizeFile(parsed.resultPath)
+	}
 	if err != nil {
 		writef(stderr, "summarize: %v\n", err)
 		return 1
@@ -252,37 +264,82 @@ func printSummaryReport(w io.Writer, summary compare.ResultsSummary) {
 		summary.ScenarioPassRuns,
 	)
 
-	metrics := make([]string, 0, len(summary.ByMetric))
-	for metric := range summary.ByMetric {
-		metrics = append(metrics, metric)
-	}
-	sort.Strings(metrics)
-	for _, metric := range metrics {
-		s := summary.ByMetric[metric]
-		writef(
-			w,
-			"metric=%s\tcount=%d\tpassed=%d\tfailed=%d\tmean_score=%.3f\tstddev=%.3f\tmin_score=%.3f\tmax_score=%.3f\tmean_tokens=%.1f\tmean_latency_ns=%d\tpass_rate=%.3f\tp95_tokens=%.1f\tp95_latency_ns=%d\n",
-			metric,
-			s.Count,
-			s.Passed,
-			s.Failed,
-			s.MeanScore,
-			s.StdDev,
-			s.MinScore,
-			s.MaxScore,
-			s.MeanTokens,
-			int64(s.MeanLatency),
-			s.PassRate,
-			s.P95Tokens,
-			int64(s.P95Latency),
-		)
+	printSummaryGroups(w, "metric", summary.ByMetric)
+	printSummaryGroups(w, "tier", summary.ByTier)
+	printSummaryGroups(w, "flow", summary.ByFlow)
+	printSummaryGroups(w, "dataset", summary.ByDataset)
+	printSummaryGroups(w, "case", summary.ByCase)
+	for _, flaky := range summary.Flaky {
+		printFlakySummary(w, flaky)
 	}
 }
 
+func printSummaryGroups(w io.Writer, label string, groups map[string]compare.MetricSummary) {
+	keys := make([]string, 0, len(groups))
+	for key := range groups {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		printMetricSummary(w, label, key, groups[key])
+	}
+}
+
+func printMetricSummary(w io.Writer, label string, key string, s compare.MetricSummary) {
+	writef(
+		w,
+		"%s=%s\tcount=%d\tpassed=%d\tfailed=%d\tmean_score=%.3f\tstddev=%.3f\tmin_score=%.3f\tmax_score=%.3f\tmean_tokens=%.1f\tmean_latency_ns=%d\tpass_rate=%.3f\tp95_tokens=%.1f\tp95_latency_ns=%d\n",
+		label,
+		key,
+		s.Count,
+		s.Passed,
+		s.Failed,
+		s.MeanScore,
+		s.StdDev,
+		s.MinScore,
+		s.MaxScore,
+		s.MeanTokens,
+		int64(s.MeanLatency),
+		s.PassRate,
+		s.P95Tokens,
+		int64(s.P95Latency),
+	)
+}
+
+func printFlakySummary(w io.Writer, flaky compare.FlakySummary) {
+	writeString(w, "flaky")
+	if flaky.Identity.TestName != "" {
+		writef(w, "\ttest=%s", flaky.Identity.TestName)
+	}
+	if flaky.Identity.CaseName != "" {
+		writef(w, "\tcase=%s", flaky.Identity.CaseName)
+	}
+	if flaky.Identity.Metric != "" {
+		writef(w, "\tmetric=%s", flaky.Identity.Metric)
+	}
+	writef(
+		w,
+		"\tcount=%d\tpassed=%d\tfailed=%d\tmean_score=%.3f\tstddev=%.3f\tmixed_pass=%t\tscore_flaky=%t\n",
+		flaky.Count,
+		flaky.Passed,
+		flaky.Failed,
+		flaky.MeanScore,
+		flaky.StdDev,
+		flaky.MixedPass,
+		flaky.ScoreFlaky,
+	)
+}
+
 func printEntry(w io.Writer, entry compare.Entry) {
-	writef(w, "%s\t%s", entry.Status, entry.Identity.TestName)
+	writef(w, "%s", entry.Status)
+	if entry.Identity.TestName != "" {
+		writef(w, "\t%s", entry.Identity.TestName)
+	}
 	if entry.Identity.CaseName != "" {
 		writef(w, "\tcase=%s", entry.Identity.CaseName)
+	}
+	if entry.Identity.TestName == "" && entry.Identity.CaseName == "" {
+		writef(w, "\t%s", entry.Identity.Metric)
 	}
 	writef(w, "\tmetric=%s", entry.Identity.Metric)
 
@@ -368,6 +425,13 @@ type compareCommandArgs struct {
 	format           string
 }
 
+type summarizeCommandArgs struct {
+	resultPath string
+	policyPath string
+	configPath string
+	caseIDKey  string
+}
+
 func parseTestArgs(args []string) (string, string, []string, error) {
 	var profile string
 	var config string
@@ -396,6 +460,49 @@ func parseTestArgs(args []string) (string, string, []string, error) {
 		}
 	}
 	return profile, config, forwarded, nil
+}
+
+func parseSummarizeArgs(args []string) (summarizeCommandArgs, error) {
+	var parsed summarizeCommandArgs
+	var positionals []string
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "--policy":
+			i++
+			if i >= len(args) {
+				return parsed, errors.New("--policy requires a value")
+			}
+			parsed.policyPath = args[i]
+		case strings.HasPrefix(arg, "--policy="):
+			parsed.policyPath = strings.TrimPrefix(arg, "--policy=")
+		case arg == "--config":
+			i++
+			if i >= len(args) {
+				return parsed, errors.New("--config requires a value")
+			}
+			parsed.configPath = args[i]
+		case strings.HasPrefix(arg, "--config="):
+			parsed.configPath = strings.TrimPrefix(arg, "--config=")
+		case arg == "--case-id-key":
+			i++
+			if i >= len(args) {
+				return parsed, errors.New("--case-id-key requires a value")
+			}
+			parsed.caseIDKey = args[i]
+		case strings.HasPrefix(arg, "--case-id-key="):
+			parsed.caseIDKey = strings.TrimPrefix(arg, "--case-id-key=")
+		case strings.HasPrefix(arg, "-"):
+			return parsed, fmt.Errorf("unknown flag %q", arg)
+		default:
+			positionals = append(positionals, arg)
+		}
+	}
+	if len(positionals) != 1 {
+		return parsed, errors.New("usage: goeval summarize <results.jsonl>")
+	}
+	parsed.resultPath = positionals[0]
+	return parsed, nil
 }
 
 func parseCompareArgs(args []string) (compareCommandArgs, error) {
@@ -483,6 +590,41 @@ func parseCompareArgs(args []string) (compareCommandArgs, error) {
 	parsed.baselinePath = positionals[0]
 	parsed.currentPath = positionals[1]
 	return parsed, nil
+}
+
+func loadSummaryPolicy(args summarizeCommandArgs) (compare.Policy, bool, error) {
+	var policy compare.Policy
+	usePolicy := false
+	if args.configPath != "" {
+		manifest, _, err := loadManifest(args.configPath, true)
+		if err != nil {
+			return compare.Policy{}, false, fmt.Errorf("read config: %w", err)
+		}
+		policy = manifest.Compare
+		usePolicy = true
+	} else {
+		manifest, ok, err := loadManifest(defaultConfigPath, false)
+		if err != nil {
+			return compare.Policy{}, false, fmt.Errorf("read config: %w", err)
+		}
+		if ok {
+			policy = manifest.Compare
+			usePolicy = true
+		}
+	}
+	if args.policyPath != "" {
+		loaded, err := loadPolicyFile(args.policyPath)
+		if err != nil {
+			return compare.Policy{}, false, fmt.Errorf("read policy: %w", err)
+		}
+		policy = loaded
+		usePolicy = true
+	}
+	if args.caseIDKey != "" {
+		policy.CaseIDKey = args.caseIDKey
+		usePolicy = true
+	}
+	return policy, usePolicy, nil
 }
 
 func loadComparePolicy(args compareCommandArgs) (compare.Policy, bool, error) {

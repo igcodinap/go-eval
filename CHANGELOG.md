@@ -16,6 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   JSON output, and `goeval compare` policy flags
 - Reliability summaries with pass rates, p95 latency/tokens, metadata grouping,
   flaky identity detection, and scenario run totals
+- Policy-aware summary APIs and `goeval summarize` policy flags for case ID
+  identity and flaky-score thresholds
+
+### Changed
+
+- `compare.CaseIDFromMetadata` now keys rows with case IDs by case ID and metric,
+  falling back to test name and metric only when the metadata key is missing
+- `goeval summarize` text output now includes tier, flow, dataset, case, and
+  flaky identity rows in addition to metric rows
 
 ## [v0.8.0] - 2026-05-27
 

@@ -162,21 +162,23 @@ func DefaultIdentity(result eval.RunResult) Identity {
 // CaseIDFromMetadata builds an IdentityFunc that keys rows by metadata case ID.
 //
 // An empty key uses the conventional "case_id" metadata key. Non-string values
-// are formatted with fmt.Sprint so JSONL-decoded numeric IDs remain usable.
+// are formatted with fmt.Sprint so JSONL-decoded numeric IDs remain usable. Rows
+// without the metadata key fall back to DefaultIdentity.
 func CaseIDFromMetadata(key string) IdentityFunc {
 	if key == "" {
 		key = DefaultCaseIDMetadataKey
 	}
 	return func(result eval.RunResult) Identity {
-		caseName := ""
 		if value, ok := result.Metadata[key]; ok && value != nil {
-			caseName = fmt.Sprint(value)
+			caseName := fmt.Sprint(value)
+			if caseName != "" {
+				return Identity{
+					CaseName: caseName,
+					Metric:   result.Metric,
+				}
+			}
 		}
-		return Identity{
-			TestName: result.TestName,
-			CaseName: caseName,
-			Metric:   result.Metric,
-		}
+		return DefaultIdentity(result)
 	}
 }
 
@@ -346,7 +348,7 @@ func CompareWithPolicy(baseline []eval.RunResult, current []eval.RunResult, poli
 				entry.Current = currentRows[i]
 				entry.HasBaseline = true
 				entry.HasCurrent = true
-				resolved := policy.resolve(entry.Current.Metric, tierFromResult(entry.Current))
+				resolved := policy.resolveForComparison(entry.Baseline, entry.Current)
 				entry.Delta = compareDelta(entry.Baseline, entry.Current)
 				entry.Dimensions = compareDimensions(entry.Baseline.Dimensions, entry.Current.Dimensions, resolved.scoreTolerance)
 				entry.Status = classify(entry.Baseline, entry.Current, entry.Delta, entry.Dimensions, resolved.scoreTolerance)
@@ -397,6 +399,20 @@ func (p Policy) resolve(metric string, tier string) resolvedPolicy {
 	return out
 }
 
+func (p Policy) resolveForComparison(baseline eval.RunResult, current eval.RunResult) resolvedPolicy {
+	baselineTier := tierFromResult(baseline)
+	currentTier := tierFromResult(current)
+	currentPolicy := p.resolve(current.Metric, currentTier)
+	if baselineTier == currentTier || baselineTier == "" {
+		return currentPolicy
+	}
+	baselinePolicy := p.resolve(baseline.Metric, baselineTier)
+	if currentTier == "" {
+		return baselinePolicy
+	}
+	return stricterPolicy(baselinePolicy, currentPolicy)
+}
+
 func (p *resolvedPolicy) apply(policy MetricPolicy) {
 	if policy.ScoreTolerance != nil {
 		p.scoreTolerance = math.Abs(*policy.ScoreTolerance)
@@ -409,6 +425,15 @@ func (p *resolvedPolicy) apply(policy MetricPolicy) {
 	}
 	if policy.FlakyScoreStdDev != nil {
 		p.flakyScoreStdDev = math.Abs(*policy.FlakyScoreStdDev)
+	}
+}
+
+func stricterPolicy(left resolvedPolicy, right resolvedPolicy) resolvedPolicy {
+	return resolvedPolicy{
+		scoreTolerance:   math.Min(left.scoreTolerance, right.scoreTolerance),
+		failOnMissing:    left.failOnMissing || right.failOnMissing,
+		failOnRegression: left.failOnRegression || right.failOnRegression,
+		flakyScoreStdDev: math.Min(left.flakyScoreStdDev, right.flakyScoreStdDev),
 	}
 }
 

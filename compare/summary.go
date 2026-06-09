@@ -3,6 +3,7 @@ package compare
 import (
 	"math"
 	"sort"
+	"strings"
 	"time"
 
 	eval "github.com/igcodinap/go-eval"
@@ -49,6 +50,7 @@ type MetricSummary struct {
 type SummaryOptions struct {
 	Identity         IdentityFunc
 	FlakyScoreStdDev float64
+	Policy           *Policy
 }
 
 // FlakySummary identifies repeated rows with mixed pass/fail or score variance.
@@ -74,6 +76,9 @@ type metricAccumulator struct {
 	tokenSum     int
 	latencies    []int64
 	tokens       []int
+
+	flakyThreshold    float64
+	hasFlakyThreshold bool
 }
 
 // SummarizeFile reads and summarizes one JSONL result file.
@@ -85,16 +90,35 @@ func SummarizeFile(path string) (ResultsSummary, error) {
 	return Summarize(results), nil
 }
 
+// SummarizeFileWithPolicy reads and summarizes one JSONL result file using policy.
+func SummarizeFileWithPolicy(path string, policy Policy) (ResultsSummary, error) {
+	results, err := ReadJSONLFile(path)
+	if err != nil {
+		return ResultsSummary{}, err
+	}
+	return SummarizeWithPolicy(results, policy), nil
+}
+
 // Summarize aggregates one set of result rows by pass/fail and metric.
 func Summarize(results []eval.RunResult) ResultsSummary {
 	return SummarizeWithOptions(results, SummaryOptions{})
+}
+
+// SummarizeWithPolicy aggregates one set of result rows using compare policy for
+// stable case identity and flaky-score thresholds.
+func SummarizeWithPolicy(results []eval.RunResult, policy Policy) ResultsSummary {
+	return SummarizeWithOptions(results, SummaryOptions{Policy: &policy})
 }
 
 // SummarizeWithOptions aggregates one set of result rows with reliability options.
 func SummarizeWithOptions(results []eval.RunResult, opts SummaryOptions) ResultsSummary {
 	identity := opts.Identity
 	if identity == nil {
-		identity = CaseIDFromMetadata("")
+		if opts.Policy != nil && opts.Policy.CaseIDKey != "" {
+			identity = CaseIDFromMetadata(opts.Policy.CaseIDKey)
+		} else {
+			identity = CaseIDFromMetadata("")
+		}
 	}
 	flakyThreshold := opts.FlakyScoreStdDev
 	if flakyThreshold <= 0 {
@@ -112,7 +136,7 @@ func SummarizeWithOptions(results []eval.RunResult, opts SummaryOptions) Results
 	tierAccumulators := map[string]*metricAccumulator{}
 	flowAccumulators := map[string]*metricAccumulator{}
 	datasetAccumulators := map[string]*metricAccumulator{}
-	caseAccumulators := map[string]*metricAccumulator{}
+	caseAccumulators := map[Identity]*metricAccumulator{}
 
 	for _, result := range results {
 		if isScenarioSummaryRow(result) {
@@ -136,7 +160,7 @@ func SummarizeWithOptions(results []eval.RunResult, opts SummaryOptions) Results
 		if dataset := metadataString(result.Metadata, "dataset"); dataset != "" {
 			addToAccumulator(datasetAccumulators, dataset, result)
 		}
-		addToAccumulator(caseAccumulators, summaryIdentityKey(identity(result)), result)
+		addToIdentityAccumulator(caseAccumulators, identity(result), result, flakyThresholdForResult(result, flakyThreshold, opts.Policy))
 	}
 
 	if summary.Total > 0 {
@@ -154,10 +178,10 @@ func SummarizeWithOptions(results []eval.RunResult, opts SummaryOptions) Results
 	for dataset, acc := range datasetAccumulators {
 		summary.ByDataset[dataset] = acc.summary()
 	}
-	for caseID, acc := range caseAccumulators {
+	for identity, acc := range caseAccumulators {
 		caseSummary := acc.summary()
-		summary.ByCase[caseID] = caseSummary
-		if flaky := flakySummary(caseID, caseSummary, flakyThreshold); flaky.Count > 0 {
+		summary.ByCase[summaryIdentityKey(identity)] = caseSummary
+		if flaky := flakySummary(identity, caseSummary, acc.flakyThresholdOrDefault(flakyThreshold)); flaky.Count > 0 {
 			summary.Flaky = append(summary.Flaky, flaky)
 		}
 	}
@@ -246,29 +270,90 @@ func addToAccumulator(accumulators map[string]*metricAccumulator, key string, re
 	acc.add(result)
 }
 
+func addToIdentityAccumulator(accumulators map[Identity]*metricAccumulator, identity Identity, result eval.RunResult, flakyThreshold float64) {
+	if summaryIdentityKey(identity) == "" {
+		return
+	}
+	acc := accumulators[identity]
+	if acc == nil {
+		acc = &metricAccumulator{
+			minScore: math.Inf(1),
+			maxScore: math.Inf(-1),
+		}
+		accumulators[identity] = acc
+	}
+	acc.add(result)
+	acc.setFlakyThreshold(flakyThreshold)
+}
+
+func (a *metricAccumulator) setFlakyThreshold(threshold float64) {
+	if math.IsNaN(threshold) || math.IsInf(threshold, 0) {
+		return
+	}
+	if !a.hasFlakyThreshold || threshold < a.flakyThreshold {
+		a.flakyThreshold = threshold
+		a.hasFlakyThreshold = true
+	}
+}
+
+func (a metricAccumulator) flakyThresholdOrDefault(defaultThreshold float64) float64 {
+	if a.hasFlakyThreshold {
+		return a.flakyThreshold
+	}
+	return defaultThreshold
+}
+
+func flakyThresholdForResult(result eval.RunResult, defaultThreshold float64, policy *Policy) float64 {
+	if policy == nil {
+		return defaultThreshold
+	}
+	threshold := defaultThreshold
+	apply := func(metricPolicy MetricPolicy) {
+		if metricPolicy.FlakyScoreStdDev != nil {
+			threshold = math.Abs(*metricPolicy.FlakyScoreStdDev)
+		}
+	}
+	apply(policy.Default)
+	tier := tierFromResult(result)
+	if tierPolicy, ok := policy.Tiers[tier]; ok {
+		apply(tierPolicy)
+	}
+	if metricPolicy, ok := policy.Metrics[result.Metric]; ok {
+		apply(metricPolicy)
+	}
+	if byTier, ok := policy.MetricTiers[result.Metric]; ok {
+		if metricTierPolicy, ok := byTier[tier]; ok {
+			apply(metricTierPolicy)
+		}
+	}
+	return threshold
+}
+
 func metadataString(metadata map[string]any, key string) string {
 	value, _ := metadata[key].(string)
 	return value
 }
 
 func summaryIdentityKey(identity Identity) string {
-	key := identity.TestName
+	parts := make([]string, 0, 3)
+	if identity.TestName != "" {
+		parts = append(parts, identity.TestName)
+	}
 	if identity.CaseName != "" {
-		key += "/" + identity.CaseName
+		parts = append(parts, identity.CaseName)
 	}
 	if identity.Metric != "" {
-		key += "/" + identity.Metric
+		parts = append(parts, identity.Metric)
 	}
-	return key
+	return strings.Join(parts, "/")
 }
 
-func flakySummary(key string, summary MetricSummary, threshold float64) FlakySummary {
+func flakySummary(identity Identity, summary MetricSummary, threshold float64) FlakySummary {
 	mixedPass := summary.Passed > 0 && summary.Failed > 0
 	scoreFlaky := summary.StdDev > threshold
 	if summary.Count < 2 || (!mixedPass && !scoreFlaky) {
 		return FlakySummary{}
 	}
-	identity := Identity{TestName: key}
 	return FlakySummary{
 		Identity:   identity,
 		Count:      summary.Count,

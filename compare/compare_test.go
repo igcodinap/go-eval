@@ -122,12 +122,12 @@ func TestCompareRepresentsMissingAndAddedRowsDeterministically(t *testing.T) {
 
 func TestCompareWithOptionsUsesCaseIdentity(t *testing.T) {
 	baseline := []eval.RunResult{
-		{TestName: "TestEval", Metric: "Faithfulness", Score: 0.5, Passed: true, Metadata: map[string]any{"case_id": "b"}},
-		{TestName: "TestEval", Metric: "Faithfulness", Score: 0.8, Passed: true, Metadata: map[string]any{"case_id": "a"}},
+		{TestName: "TestEval/old", Metric: "Faithfulness", Score: 0.5, Passed: true, Metadata: map[string]any{"case_id": "b"}},
+		{TestName: "TestEval/old", Metric: "Faithfulness", Score: 0.8, Passed: true, Metadata: map[string]any{"case_id": "a"}},
 	}
 	current := []eval.RunResult{
-		{TestName: "TestEval", Metric: "Faithfulness", Score: 0.7, Passed: true, Metadata: map[string]any{"case_id": "a"}},
-		{TestName: "TestEval", Metric: "Faithfulness", Score: 0.6, Passed: true, Metadata: map[string]any{"case_id": "b"}},
+		{TestName: "TestEval/new", Metric: "Faithfulness", Score: 0.7, Passed: true, Metadata: map[string]any{"case_id": "a"}},
+		{TestName: "TestEval/new", Metric: "Faithfulness", Score: 0.6, Passed: true, Metadata: map[string]any{"case_id": "b"}},
 	}
 
 	report := CompareWithOptions(baseline, current, Options{Identity: CaseIDFromMetadata("")})
@@ -135,10 +135,13 @@ func TestCompareWithOptionsUsesCaseIdentity(t *testing.T) {
 	if len(report.Entries) != 2 {
 		t.Fatalf("expected 2 entries, got %d", len(report.Entries))
 	}
-	if report.Entries[0].Identity.CaseName != "a" || report.Entries[0].Status != StatusRegressed {
+	if report.Summary.Missing != 0 || report.Summary.Added != 0 {
+		t.Fatalf("renamed tests with stable case IDs should match: %+v", report.Summary)
+	}
+	if report.Entries[0].Identity.TestName != "" || report.Entries[0].Identity.CaseName != "a" || report.Entries[0].Status != StatusRegressed {
 		t.Fatalf("unexpected first entry: %+v", report.Entries[0])
 	}
-	if report.Entries[1].Identity.CaseName != "b" || report.Entries[1].Status != StatusImproved {
+	if report.Entries[1].Identity.TestName != "" || report.Entries[1].Identity.CaseName != "b" || report.Entries[1].Status != StatusImproved {
 		t.Fatalf("unexpected second entry: %+v", report.Entries[1])
 	}
 }
@@ -152,7 +155,20 @@ func TestCaseIDFromMetadataUsesCustomKeyAndFormatsValues(t *testing.T) {
 		Metadata: map[string]any{"id": float64(42)},
 	})
 
-	if got.TestName != "TestEval" || got.CaseName != "42" || got.Metric != "ArtifactJSONPath" {
+	if got.TestName != "" || got.CaseName != "42" || got.Metric != "ArtifactJSONPath" {
+		t.Fatalf("unexpected identity: %+v", got)
+	}
+}
+
+func TestCaseIDFromMetadataFallsBackToTestNameWhenMissing(t *testing.T) {
+	identity := CaseIDFromMetadata("id")
+
+	got := identity(eval.RunResult{
+		TestName: "TestEval",
+		Metric:   "ArtifactJSONPath",
+	})
+
+	if got.TestName != "TestEval" || got.CaseName != "" || got.Metric != "ArtifactJSONPath" {
 		t.Fatalf("unexpected identity: %+v", got)
 	}
 }
@@ -303,7 +319,7 @@ func TestCompareWithPolicyAppliesPrecedenceAndDecisions(t *testing.T) {
 		},
 	})
 
-	entry := findEntry(t, report, "TestEval", "same", "Faithfulness")
+	entry := findEntry(t, report, "", "same", "Faithfulness")
 	if entry.Status != StatusRegressed {
 		t.Fatalf("expected metric+tier tolerance to regress, got %+v", entry)
 	}
@@ -336,6 +352,31 @@ func TestCompareWithPolicyCanDisableRegressionAndMissingFailures(t *testing.T) {
 	}
 	if report.Summary.PolicyFailures != 0 {
 		t.Fatalf("policy failures = %d, want 0", report.Summary.PolicyFailures)
+	}
+}
+
+func TestCompareWithPolicyUsesStricterTierWhenTierChanges(t *testing.T) {
+	baseline := []eval.RunResult{
+		{TestName: "TestEval", Metric: "Faithfulness", Score: 0.9, Passed: true, Metadata: map[string]any{"tier": "critical"}},
+	}
+	current := []eval.RunResult{
+		{TestName: "TestEval", Metric: "Faithfulness", Score: 0.85, Passed: true, Metadata: map[string]any{"tier": "standard"}},
+	}
+
+	report := CompareWithPolicy(baseline, current, Policy{
+		Default: MetricPolicy{ScoreTolerance: floatPtr(0.2)},
+		Tiers: map[string]MetricPolicy{
+			"critical": {ScoreTolerance: floatPtr(0.0)},
+			"standard": {ScoreTolerance: floatPtr(0.2)},
+		},
+	})
+
+	entry := findEntry(t, report, "TestEval", "", "Faithfulness")
+	if entry.Status != StatusRegressed {
+		t.Fatalf("expected critical baseline tier to keep stricter tolerance, got %+v", entry)
+	}
+	if !entry.Decision.Failed || entry.Decision.Reason != "score_regression" {
+		t.Fatalf("unexpected policy decision: %+v", entry.Decision)
 	}
 }
 

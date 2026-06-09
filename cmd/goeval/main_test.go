@@ -407,6 +407,60 @@ func TestRunSummarizeReportsMetrics(t *testing.T) {
 	}
 }
 
+func TestRunSummarizeReportsReliabilityGroupsAndFlakes(t *testing.T) {
+	path := writeResultFile(t,
+		`{"test_name":"TestEval/one","metric":"Faithfulness","score":1,"passed":true,"tokens":10,"latency_ns":100,"metadata":{"tier":"critical","flow":"rag.answer","dataset":"smoke/v1","case_id":"a"}}`+"\n"+
+			`{"test_name":"TestEval/two","metric":"Faithfulness","score":0.5,"passed":false,"tokens":30,"latency_ns":300,"metadata":{"tier":"critical","flow":"rag.answer","dataset":"smoke/v1","case_id":"a"}}`+"\n",
+	)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(context.Background(), []string{"summarize", path}, nil, nil, &stdout, &stderr, nil)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr=%q", code, stderr.String())
+	}
+	out := stdout.String()
+	for _, want := range []string{
+		"tier=critical\tcount=2\tpassed=1\tfailed=1",
+		"flow=rag.answer\tcount=2\tpassed=1\tfailed=1",
+		"dataset=smoke/v1\tcount=2\tpassed=1\tfailed=1",
+		"case=a/Faithfulness\tcount=2\tpassed=1\tfailed=1",
+		"flaky\tcase=a\tmetric=Faithfulness\tcount=2\tpassed=1\tfailed=1",
+		"mixed_pass=true",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("stdout missing %q in:\n%s", want, out)
+		}
+	}
+}
+
+func TestRunSummarizeUsesPolicyFlakyThreshold(t *testing.T) {
+	path := writeResultFile(t,
+		`{"test_name":"TestEval/one","metric":"Faithfulness","score":0.9,"passed":true,"metadata":{"case_id":"a"}}`+"\n"+
+			`{"test_name":"TestEval/two","metric":"Faithfulness","score":0.7,"passed":true,"metadata":{"case_id":"a"}}`+"\n",
+	)
+	policyPath := writeConfigFile(t, `{
+		"case_id_key": "case_id",
+		"default": {"flaky_score_stddev": 0.2}
+	}`)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(context.Background(), []string{"summarize", "--policy", policyPath, path}, nil, nil, &stdout, &stderr, nil)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr=%q", code, stderr.String())
+	}
+	out := stdout.String()
+	if !strings.Contains(out, "case=a/Faithfulness\tcount=2\tpassed=2\tfailed=0") {
+		t.Fatalf("stdout missing policy case summary:\n%s", out)
+	}
+	if strings.Contains(out, "flaky") {
+		t.Fatalf("policy threshold should suppress score-only flake:\n%s", out)
+	}
+}
+
 func TestRunVersion(t *testing.T) {
 	oldVersion := version
 	version = "test-version"

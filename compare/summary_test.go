@@ -80,6 +80,42 @@ func TestSummarizeWithOptionsReportsFlakyIdentities(t *testing.T) {
 	if flaky.Count != 2 || flaky.Passed != 1 || flaky.Failed != 1 || !flaky.MixedPass {
 		t.Fatalf("unexpected flaky summary: %+v", flaky)
 	}
+	if flaky.Identity.TestName != "" || flaky.Identity.CaseName != "a" || flaky.Identity.Metric != "Faithfulness" {
+		t.Fatalf("unexpected flaky identity: %+v", flaky.Identity)
+	}
+}
+
+func TestSummarizeWithPolicyUsesPolicyFlakyThreshold(t *testing.T) {
+	results := []eval.RunResult{
+		{TestName: "TestEval/old", Metric: "Faithfulness", Score: 0.9, Passed: true, Metadata: map[string]any{"case_id": "same"}},
+		{TestName: "TestEval/new", Metric: "Faithfulness", Score: 0.7, Passed: true, Metadata: map[string]any{"case_id": "same"}},
+	}
+
+	relaxed := SummarizeWithPolicy(results, Policy{
+		CaseIDKey: "case_id",
+		Default: MetricPolicy{
+			FlakyScoreStdDev: floatPtr(0.2),
+		},
+	})
+	if len(relaxed.Flaky) != 0 {
+		t.Fatalf("default policy threshold should suppress score-only flake: %+v", relaxed.Flaky)
+	}
+	if relaxed.ByCase["same/Faithfulness"].Count != 2 {
+		t.Fatalf("case-id policy should group renamed tests by stable case ID: %+v", relaxed.ByCase)
+	}
+
+	sensitive := SummarizeWithPolicy(results, Policy{
+		CaseIDKey: "case_id",
+		Default: MetricPolicy{
+			FlakyScoreStdDev: floatPtr(0.2),
+		},
+		Metrics: map[string]MetricPolicy{
+			"Faithfulness": {FlakyScoreStdDev: floatPtr(0.05)},
+		},
+	})
+	if len(sensitive.Flaky) != 1 || !sensitive.Flaky[0].ScoreFlaky {
+		t.Fatalf("metric policy threshold should mark score flake: %+v", sensitive.Flaky)
+	}
 }
 
 func TestSummarizeFileReadsJSONL(t *testing.T) {

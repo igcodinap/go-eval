@@ -472,7 +472,10 @@ if err != nil {
 ```
 
 Rows are matched by `test_name` and `metric` by default. Use
-`compare.Options.Identity` when a separate case id is stored in metadata.
+`compare.Options.Identity` when a separate case id is stored in metadata. The
+`compare.CaseIDFromMetadata` helper matches rows that have the configured case
+id by case id and metric, so test renames do not appear as missing/added rows.
+Rows without that metadata key fall back to `test_name` and `metric`.
 Reports include added, missing, improved, regressed, and unchanged entries, with
 score, pass/fail, token, latency, and Compound dimension deltas.
 
@@ -560,11 +563,14 @@ Compare can use a standalone policy file or the `compare` section from
 goeval compare --policy goeval.json --format json old/results.jsonl new/results.jsonl
 goeval compare --case-id-key case_id --score-tolerance 0.02 old.jsonl new.jsonl
 goeval compare --fail-on-regression=false old.jsonl new.jsonl
+goeval summarize --policy goeval.json new/results.jsonl
 ```
 
 `goeval summarize` now includes pass rate, p95 latency/tokens, scenario run
 totals, metadata groupings in the `compare` package, and flaky repeated-case
-detection through `compare.SummarizeWithOptions`.
+detection through `compare.SummarizeWithOptions` or
+`compare.SummarizeWithPolicy`. Its text output includes metric, tier, flow,
+dataset, case, and flaky identity rows.
 
 Use built-in tier filtering for CI and nightly slices:
 
