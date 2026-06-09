@@ -698,17 +698,19 @@ func appendScenarioStepTrace(trace *Trace, step Step, result StepResult, repeatR
 		span.Metadata = mergeMetadata(span.Metadata, map[string]any{"repeat_run": repeatRun})
 	}
 	trace.Spans = append(trace.Spans, span)
-	for _, call := range flattenToolCalls(result.Turns) {
-		toolCall := call
-		trace.Spans = append(trace.Spans, Span{
-			ID:       trace.ID + "/" + step.Name + "/tool/" + call.Name,
-			ParentID: span.ID,
-			Name:     call.Name,
-			Kind:     "tool_call",
-			ToolCall: &toolCall,
-			Error:    call.Error,
-			Metadata: cloneMetadata(call.Metadata),
-		})
+	if !traceHasToolCalls(result.Trace) {
+		for _, call := range flattenToolCalls(result.Turns) {
+			toolCall := call
+			trace.Spans = append(trace.Spans, Span{
+				ID:       trace.ID + "/" + step.Name + "/tool/" + call.Name,
+				ParentID: span.ID,
+				Name:     call.Name,
+				Kind:     "tool_call",
+				ToolCall: &toolCall,
+				Error:    call.Error,
+				Metadata: cloneMetadata(call.Metadata),
+			})
+		}
 	}
 	for key, value := range result.Artifacts {
 		trace.Artifacts = append(trace.Artifacts, ArtifactRecord{
@@ -727,6 +729,18 @@ func appendScenarioStepTrace(trace *Trace, step Step, result StepResult, repeatR
 		trace.Metadata = mergeMetadata(trace.Metadata, result.Trace.Metadata)
 	}
 	trace.EndedAt = time.Now().UTC().Format(time.RFC3339Nano)
+}
+
+func traceHasToolCalls(trace *Trace) bool {
+	if trace == nil {
+		return false
+	}
+	for _, span := range trace.Spans {
+		if span.ToolCall != nil {
+			return true
+		}
+	}
+	return false
 }
 
 type toolRegistryMetric struct {

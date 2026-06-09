@@ -65,6 +65,22 @@ func TestToolArgumentAccuracyUsesTraceCalls(t *testing.T) {
 	}
 }
 
+func TestToolCallsFromCaseFallsBackToTurnsWhenTraceHasNoToolCalls(t *testing.T) {
+	calls := toolCallsFromCase(Case{
+		Trace: &Trace{Spans: []Span{{
+			Name: "planning",
+			Kind: "scenario_step",
+		}}},
+		Turns: []Turn{{
+			Role:      RoleAssistant,
+			ToolCalls: []ToolCall{{Name: "turn_tool"}},
+		}},
+	})
+	if len(calls) != 1 || calls[0].Name != "turn_tool" {
+		t.Fatalf("expected turns fallback when trace has no tool calls, got %+v", calls)
+	}
+}
+
 func TestToolArgumentAccuracyFailsMalformedArguments(t *testing.T) {
 	result, err := (ToolArgumentAccuracy{}).Score(context.Background(), nil, Case{
 		ExpectedToolCalls: []ToolCall{{

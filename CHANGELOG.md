@@ -33,13 +33,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `scenario_summary.trace_ids`
 - Tool-call metrics and scenario tool contracts now use trace tool-call spans
   when available, with `Turns` fallback for legacy cases
+- Scenario trace assembly now avoids synthesizing turn-derived tool spans when
+  a step result already provides trace tool-call spans
 - Trace sink deduplication now marks a trace ID as written only after a
   successful sink write, allowing transient failures to retry
 - Judge calibration now aggregates duplicate judge or variant rows instead of
   replacing earlier rows
 - `goeval report --out` now rejects unknown file extensions unless `--format`
   is supplied explicitly
-- Markdown reports now escape table cell pipes and newlines
+- Markdown reports now escape table cell pipes, newlines, and HTML-sensitive
+  characters
 
 ## [v0.9.0] - 2026-06-09
 

@@ -370,6 +370,32 @@ func TestRunScenario_StepToolContractsUseCurrentStepTraceOnly(t *testing.T) {
 	}
 }
 
+func TestRunScenario_TraceToolCallsAreAuthoritativeOverTurnToolCalls(t *testing.T) {
+	t.Setenv(EnvVar, "1")
+
+	tb := &recordingTB{}
+	got := NewRunner(&MockJudge{}).RunScenario(tb, Scenario{
+		Name: "trace_authoritative_tool_calls",
+		Driver: func(ctx context.Context, req StepRequest) (StepResult, error) {
+			return StepResult{
+				Turns: []Turn{{
+					Role:      RoleAssistant,
+					ToolCalls: []ToolCall{{Name: "search"}},
+				}},
+				Trace: &Trace{Spans: []Span{{
+					Kind:     "tool_call",
+					ToolCall: &ToolCall{Name: "search"},
+				}}},
+			}, nil
+		},
+		Steps: []Step{{Name: "one", MaxToolCalls: 1}},
+	})
+
+	if !got.Passed || tb.errored {
+		t.Fatalf("expected duplicate turn/trace tool observation to count once, result=%+v errored=%v", got, tb.errored)
+	}
+}
+
 func TestRunScenario_CheckUsesRunnerJudgeAndTimeout(t *testing.T) {
 	t.Setenv(EnvVar, "1")
 

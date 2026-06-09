@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"html"
 	htmltemplate "html/template"
 	"sort"
 	"strings"
@@ -207,6 +208,7 @@ func writeMarkdownComparison(b *strings.Builder, report Report) {
 }
 
 func markdownCell(value string) string {
+	value = html.EscapeString(value)
 	replacer := strings.NewReplacer(
 		`\`, `\\`,
 		`|`, `\|`,

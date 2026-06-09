@@ -30,11 +30,11 @@ func TestReportMarkdownIncludesSummaryAndComparison(t *testing.T) {
 
 func TestReportMarkdownEscapesTableCells(t *testing.T) {
 	summary := Summarize([]eval.RunResult{
-		{TestName: "Test|Eval/a\ncase", Metric: "Faith|fulness\nmetric", Score: 1, Passed: true},
+		{TestName: "Test|Eval/a\ncase<script>", Metric: "Faith|fulness\nmetric<script>", Score: 1, Passed: true},
 	})
 	comparison := Compare(
-		[]eval.RunResult{{TestName: "Test|Eval/a\ncase", Metric: "Faith|fulness\nmetric", Score: 1, Passed: true}},
-		[]eval.RunResult{{TestName: "Test|Eval/a\ncase", Metric: "Faith|fulness\nmetric", Score: 0, Passed: false}},
+		[]eval.RunResult{{TestName: "Test|Eval/a\ncase<script>", Metric: "Faith|fulness\nmetric<script>", Score: 1, Passed: true}},
+		[]eval.RunResult{{TestName: "Test|Eval/a\ncase<script>", Metric: "Faith|fulness\nmetric<script>", Score: 0, Passed: false}},
 	)
 	rendered, err := ReportMarkdown(NewComparisonReport("old.jsonl", "new.jsonl", summary, comparison))
 	if err != nil {
@@ -42,8 +42,8 @@ func TestReportMarkdownEscapesTableCells(t *testing.T) {
 	}
 	out := string(rendered)
 	for _, want := range []string{
-		"Faith\\|fulness<br>metric",
-		"Test\\|Eval/a<br>case",
+		"Faith\\|fulness<br>metric&lt;script&gt;",
+		"Test\\|Eval/a<br>case&lt;script&gt;",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("markdown missing escaped cell %q:\n%s", want, out)

@@ -134,53 +134,68 @@ For LLM-judge metrics, "typically needed fields" are not hard-validated by the l
 
 ## ToolCallAccuracy
 
-- Required fields: `Case.Turns`, `Case.ExpectedToolCalls`.
+- Required fields: `Case.Trace` tool-call spans or `Case.Turns`,
+  `Case.ExpectedToolCalls`.
 - Score: fraction of expected/actual tool calls matched under `Mode`.
 - Default threshold: `1.0`.
 - Matching: names match exactly; `MatchArgs` compares normalized JSON and treats
   missing expected arguments as a wildcard; `MatchResult` compares non-empty
   expected result strings and treats empty expected results as a wildcard.
+- Trace precedence: when `Case.Trace` contains tool-call spans, those calls are
+  authoritative; otherwise the metric falls back to `Case.Turns`.
 - Use for: deterministic trajectory checks with strict, unordered, subset, or superset matching.
 - Avoid for: semantic quality of final prose; pair with `Faithfulness`, `AnswerRelevancy`, or `GEval`.
 - Anti-pattern: enabling `MatchArgs` with non-JSON arguments.
 
 ## ToolCallF1
 
-- Required fields: `Case.Turns`, `Case.ExpectedToolCalls`.
+- Required fields: `Case.Trace` tool-call spans or `Case.Turns`,
+  `Case.ExpectedToolCalls`.
 - Score: F1 over matched tool calls; precision, recall, and F1 are emitted as dimensions.
 - Default threshold: `0.8`.
 - Matching: same name, argument, result, wildcard, and duplicate-call semantics
   as `ToolCallAccuracy`.
+- Trace precedence: when `Case.Trace` contains tool-call spans, those calls are
+  authoritative; otherwise the metric falls back to `Case.Turns`.
 - Use for: tool-use suites where extras and omissions should both be visible.
 - Avoid for: exact sequence assertions; use `ToolCallAccuracy{Mode: MatchStrict}`.
 - Anti-pattern: relying on F1 alone when a forbidden tool is high-severity.
 
 ## RequiredTools
 
-- Required fields: `Case.Turns`, configured `Names` or `Patterns`.
+- Required fields: `Case.Trace` tool-call spans or `Case.Turns`, configured
+  `Names` or `Patterns`.
 - Score: `1` when every configured tool name and pattern appears at least once, else `0`.
 - Patterns use stdlib glob syntax, not regular expressions.
 - Default threshold: binary pass.
+- Trace precedence: when `Case.Trace` contains tool-call spans, those calls are
+  authoritative; otherwise the metric falls back to `Case.Turns`.
 - Use for: must-call behavior in tool-use or scenario steps.
 - Avoid for: validating order or arguments; use `ToolCallAccuracy` when those matter.
 - Anti-pattern: checking provider display names instead of stable tool names.
 
 ## ForbiddenTool
 
-- Required fields: `Case.Turns`, configured `Names` or `Patterns`.
+- Required fields: `Case.Trace` tool-call spans or `Case.Turns`, configured
+  `Names` or `Patterns`.
 - Score: `1` when none of the configured tool names or non-excepted pattern
   matches appear, else `0`.
 - Patterns use stdlib glob syntax, not regular expressions.
 - Default threshold: binary pass.
+- Trace precedence: when `Case.Trace` contains tool-call spans, those calls are
+  authoritative; otherwise the metric falls back to `Case.Turns`.
 - Use for: policy and safety gates on tool access.
 - Avoid for: allow-list behavior; use `ToolCallAccuracy` or a custom deterministic metric.
 - Anti-pattern: using display labels instead of stable tool names.
 
 ## StepBudget
 
-- Required fields: `Case.Turns`, configured `MaxSteps`.
+- Required fields: `Case.Trace` tool-call spans or `Case.Turns`, configured
+  `MaxSteps`.
 - Score: `1` when within budget; otherwise `MaxSteps / actual_steps`.
 - Default threshold: binary pass.
+- Trace precedence: when `Case.Trace` contains tool-call spans, those calls are
+  authoritative; otherwise the metric falls back to `Case.Turns`.
 - Use for: cheap prechecks before expensive judge metrics.
 - Avoid for: counting all transcript messages; it intentionally counts tool calls only.
 - Anti-pattern: setting budgets so tight that legitimate retries always fail.
