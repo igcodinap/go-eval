@@ -19,7 +19,7 @@ func (m ToolCallF1) Name() string { return "ToolCallF1" }
 func (m ToolCallF1) Score(ctx context.Context, _ Judge, c Case) (Result, error) {
 	_ = ctx
 
-	actual := flattenToolCalls(c.Turns)
+	actual := toolCallsFromCase(c)
 	expected := c.ExpectedToolCalls
 	matched, err := countToolCallMatches(actual, expected, toolCallMatchOptions{
 		matchArgs:   m.MatchArgs,

@@ -28,6 +28,29 @@ func TestReportMarkdownIncludesSummaryAndComparison(t *testing.T) {
 	}
 }
 
+func TestReportMarkdownEscapesTableCells(t *testing.T) {
+	summary := Summarize([]eval.RunResult{
+		{TestName: "Test|Eval/a\ncase", Metric: "Faith|fulness\nmetric", Score: 1, Passed: true},
+	})
+	comparison := Compare(
+		[]eval.RunResult{{TestName: "Test|Eval/a\ncase", Metric: "Faith|fulness\nmetric", Score: 1, Passed: true}},
+		[]eval.RunResult{{TestName: "Test|Eval/a\ncase", Metric: "Faith|fulness\nmetric", Score: 0, Passed: false}},
+	)
+	rendered, err := ReportMarkdown(NewComparisonReport("old.jsonl", "new.jsonl", summary, comparison))
+	if err != nil {
+		t.Fatalf("ReportMarkdown: %v", err)
+	}
+	out := string(rendered)
+	for _, want := range []string{
+		"Faith\\|fulness<br>metric",
+		"Test\\|Eval/a<br>case",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("markdown missing escaped cell %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestReportHTMLIncludesEscapedMetricRows(t *testing.T) {
 	summary := Summarize([]eval.RunResult{
 		{TestName: "TestEval/a", Metric: "Faithfulness<script>", Score: 1, Passed: true},

@@ -53,6 +53,19 @@ func TestStepBudgetCountsToolCallsAcrossTurns(t *testing.T) {
 	}
 }
 
+func TestStepBudgetUsesTraceToolCallsWhenPresent(t *testing.T) {
+	c := caseWithTraceCalls([]ToolCall{{Name: "search"}, {Name: "lookup"}}, nil)
+	c.Turns = []Turn{{Role: RoleAssistant, ToolCalls: []ToolCall{{Name: "turn_only"}}}}
+
+	result, err := (StepBudget{MaxSteps: 1}).Score(context.Background(), nil, c)
+	if err != nil {
+		t.Fatalf("Score: %v", err)
+	}
+	if result.Passed || result.Score != 0.5 || !strings.Contains(result.Reason, "2 > 1") {
+		t.Fatalf("expected trace tool calls to exceed budget, got %+v", result)
+	}
+}
+
 func TestStepBudgetWorksAsPrecheck(t *testing.T) {
 	main := &countingMetric{
 		name:   "Faithfulness",

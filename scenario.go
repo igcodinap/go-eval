@@ -174,18 +174,32 @@ func (r *Runner) runScenarioOnce(
 		}
 
 		stepTurns := cloneTurns(stepResult.Turns)
+		stepMetadata := scenarioStepMetadata(s, step, stepResult.Metadata, repeatRun, repeatTotal)
+		spanStart := len(trace.Spans)
+		artifactStart := len(trace.Artifacts)
+		stateDeltaStart := len(trace.StateDeltas)
 		appendScenarioStepTrace(&trace, step, stepResult, repeatRun)
+		stepTrace := trace
+		stepTrace.Name = step.Name
+		stepTrace.TestName = scenarioStepTestName(tb.Name(), s.Name, step.Name)
+		stepTrace.Spans = cloneSpans(trace.Spans[spanStart:])
+		stepTrace.Artifacts = cloneArtifactRecords(trace.Artifacts[artifactStart:])
+		stepTrace.StateDeltas = cloneStateDeltas(trace.StateDeltas[stateDeltaStart:])
+		if stepResult.Trace != nil {
+			stepTrace.Metadata = mergeMetadata(stepMetadata, stepResult.Trace.Metadata)
+		} else {
+			stepTrace.Metadata = stepMetadata
+		}
 		history = append(history, stepTurns...)
 		mergeArtifacts(artifacts, stepResult.Artifacts)
 		state = mergeMetadata(state, stepResult.State)
 
-		stepMetadata := scenarioStepMetadata(s, step, stepResult.Metadata, repeatRun, repeatTotal)
 		stepCase := Case{
 			Input:     step.Input,
 			Output:    stepResult.Output,
 			Turns:     cloneTurns(stepTurns),
 			TraceID:   trace.ID,
-			Trace:     &trace,
+			Trace:     &stepTrace,
 			Metadata:  stepMetadata,
 			Artifacts: cloneArtifacts(artifacts),
 			Timeout:   step.Timeout,
@@ -723,7 +737,7 @@ func (m toolRegistryMetric) Name() string { return "ToolRegistry" }
 
 func (m toolRegistryMetric) Score(ctx context.Context, _ Judge, c Case) (Result, error) {
 	_ = ctx
-	for _, call := range flattenToolCalls(c.Turns) {
+	for _, call := range toolCallsFromCase(c) {
 		if !m.registry.has(call.Name) {
 			return Result{
 				Score:  0,

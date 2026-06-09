@@ -5,7 +5,8 @@ import (
 	"fmt"
 )
 
-// ToolCallAccuracy compares actual tool calls in Case.Turns with Case.ExpectedToolCalls.
+// ToolCallAccuracy compares actual tool calls in Case.Trace tool-call spans, or
+// Case.Turns when no trace tool calls are present, with Case.ExpectedToolCalls.
 type ToolCallAccuracy struct {
 	Mode        MatchMode
 	MatchArgs   bool
@@ -25,7 +26,7 @@ func (m ToolCallAccuracy) Score(ctx context.Context, _ Judge, c Case) (Result, e
 		return failedTrajectoryResult(m.Name(), err.Error()), nil
 	}
 
-	actual := flattenToolCalls(c.Turns)
+	actual := toolCallsFromCase(c)
 	expected := c.ExpectedToolCalls
 	score, err := toolCallAccuracyScore(actual, expected, mode, toolCallMatchOptions{
 		matchArgs:   m.MatchArgs,

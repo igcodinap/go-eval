@@ -5,7 +5,8 @@ import (
 	"fmt"
 )
 
-// RequiredTools fails when any configured tool name or pattern is absent from Case.Turns.
+// RequiredTools fails when any configured tool name or pattern is absent from
+// Case.Trace tool-call spans, or Case.Turns when no trace tool calls are present.
 type RequiredTools struct {
 	Names    []string
 	Patterns []string
@@ -29,7 +30,7 @@ func (m RequiredTools) Score(ctx context.Context, _ Judge, c Case) (Result, erro
 
 	seen := make(map[string]struct{})
 	var calls []string
-	for _, call := range flattenToolCalls(c.Turns) {
+	for _, call := range toolCallsFromCase(c) {
 		seen[call.Name] = struct{}{}
 		calls = append(calls, call.Name)
 	}

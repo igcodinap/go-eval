@@ -81,3 +81,18 @@ func TestForbiddenToolInvalidPatternFailsMetric(t *testing.T) {
 		t.Fatalf("expected invalid pattern failure, got %+v", result)
 	}
 }
+
+func TestForbiddenToolUsesTraceToolCalls(t *testing.T) {
+	c := caseWithTraceCalls([]ToolCall{{Name: "route_preview"}, {Name: "route_delete"}}, nil)
+
+	result, err := (ForbiddenTool{
+		Patterns: []string{"route_*"},
+		Except:   []string{"route_preview"},
+	}).Score(context.Background(), nil, c)
+	if err != nil {
+		t.Fatalf("Score: %v", err)
+	}
+	if result.Passed || !strings.Contains(result.Reason, "route_delete") {
+		t.Fatalf("expected forbidden trace tool failure, got %+v", result)
+	}
+}

@@ -5,7 +5,8 @@ import (
 	"fmt"
 )
 
-// ForbiddenTool fails when any configured tool name or pattern appears in Case.Turns.
+// ForbiddenTool fails when any configured tool name or pattern appears in
+// Case.Trace tool-call spans, or Case.Turns when no trace tool calls are present.
 type ForbiddenTool struct {
 	Names    []string
 	Patterns []string
@@ -33,7 +34,7 @@ func (m ForbiddenTool) Score(ctx context.Context, _ Judge, c Case) (Result, erro
 		forbidden[name] = struct{}{}
 	}
 
-	for _, call := range flattenToolCalls(c.Turns) {
+	for _, call := range toolCallsFromCase(c) {
 		if _, ok := forbidden[call.Name]; ok {
 			return Result{
 				Score:  0,

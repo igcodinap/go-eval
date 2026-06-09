@@ -3,6 +3,7 @@ package eval
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"sync"
@@ -26,6 +27,29 @@ func (s *recordingTraceSink) all() []Trace {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]Trace(nil), s.traces...)
+}
+
+type failOnceTraceSink struct {
+	mu         sync.Mutex
+	attempts   int
+	successful []Trace
+}
+
+func (s *failOnceTraceSink) WriteTrace(trace Trace) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.attempts++
+	if s.attempts == 1 {
+		return errors.New("temporary trace sink failure")
+	}
+	s.successful = append(s.successful, trace)
+	return nil
+}
+
+func (s *failOnceTraceSink) stats() (int, []Trace) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.attempts, append([]Trace(nil), s.successful...)
 }
 
 func TestTraceJSONRoundTrip(t *testing.T) {
@@ -200,6 +224,45 @@ func TestRunnerWritesSharedTraceOnce(t *testing.T) {
 	}
 	if traces := traceSink.all(); len(traces) != 1 {
 		t.Fatalf("expected one trace write for shared trace id, got %+v", traces)
+	}
+}
+
+func TestRunnerRetriesTraceWriteAfterSinkFailure(t *testing.T) {
+	t.Setenv(EnvVar, "1")
+
+	tb := &recordingTB{}
+	traceSink := &failOnceTraceSink{}
+	r := NewRunner(
+		&MockJudge{},
+		WithTraceSink(traceSink),
+	)
+	c := Case{Trace: &Trace{ID: "trace-1", Spans: []Span{{Name: "lookup"}}}}
+
+	_ = r.Run(tb, scriptedMetric{
+		name:   "A",
+		result: Result{Score: 1, Passed: true, Metric: "A", Reason: "ok"},
+	}, c)
+	if !tb.errored {
+		t.Fatalf("expected first trace sink failure to call Errorf")
+	}
+
+	tb.errored = false
+	_ = r.Run(tb, scriptedMetric{
+		name:   "B",
+		result: Result{Score: 1, Passed: true, Metric: "B", Reason: "ok"},
+	}, c)
+	attempts, successful := traceSink.stats()
+	if attempts != 2 || len(successful) != 1 {
+		t.Fatalf("expected retry to write once successfully, attempts=%d successful=%+v", attempts, successful)
+	}
+
+	_ = r.Run(tb, scriptedMetric{
+		name:   "C",
+		result: Result{Score: 1, Passed: true, Metric: "C", Reason: "ok"},
+	}, c)
+	attempts, successful = traceSink.stats()
+	if attempts != 2 || len(successful) != 1 {
+		t.Fatalf("expected successful trace id to be deduped, attempts=%d successful=%+v", attempts, successful)
 	}
 }
 

@@ -168,6 +168,8 @@ cleanly in downstream reports.
 When both `Case.TraceID` and `Case.Trace.ID` are set, the trace's own ID is
 authoritative. `Case.TraceID` seeds an empty `Case.Trace.ID`, and a shared
 `Runner` writes each non-empty trace ID to its trace sink at most once.
+Tool-call metrics and scenario tool contracts read `Case.Trace` tool-call spans
+when present, falling back to `Case.Turns` for legacy evals.
 
 ```go
 r := eval.NewRunner(

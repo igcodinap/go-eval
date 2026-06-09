@@ -319,6 +319,57 @@ func TestRunScenario_UnknownObservedToolIsContractFailure(t *testing.T) {
 	}
 }
 
+func TestRunScenario_ToolRegistrySeesTraceOnlyStepTools(t *testing.T) {
+	t.Setenv(EnvVar, "1")
+
+	tb := &recordingTB{}
+	got := NewRunner(&MockJudge{}).RunScenario(tb, Scenario{
+		Name:  "trace_only_unknown_observed",
+		Tools: NewToolRegistry("known"),
+		Driver: func(ctx context.Context, req StepRequest) (StepResult, error) {
+			return StepResult{
+				Trace: &Trace{Spans: []Span{{
+					Kind:     "tool_call",
+					ToolCall: &ToolCall{Name: "other"},
+				}}},
+			}, nil
+		},
+		Steps: []Step{{Name: "one"}},
+	})
+
+	if got.Passed || !tb.errored || len(got.Results) != 1 || got.Results[0].Metric != "ToolRegistry" {
+		t.Fatalf("expected trace-only unknown tool failure, result=%+v errored=%v", got, tb.errored)
+	}
+}
+
+func TestRunScenario_StepToolContractsUseCurrentStepTraceOnly(t *testing.T) {
+	t.Setenv(EnvVar, "1")
+
+	tb := &recordingTB{}
+	got := NewRunner(&MockJudge{}).RunScenario(tb, Scenario{
+		Name: "current_step_trace_contracts",
+		Driver: func(ctx context.Context, req StepRequest) (StepResult, error) {
+			if req.Step.Name == "first" {
+				return StepResult{
+					Trace: &Trace{Spans: []Span{{
+						Kind:     "tool_call",
+						ToolCall: &ToolCall{Name: "safe_tool"},
+					}}},
+				}, nil
+			}
+			return StepResult{}, nil
+		},
+		Steps: []Step{
+			{Name: "first"},
+			{Name: "second", RequiredTools: []string{"safe_tool"}, ExpectFail: true},
+		},
+	})
+
+	if !got.Passed || tb.errored {
+		t.Fatalf("expected second step not to inherit first step trace tools, result=%+v errored=%v", got, tb.errored)
+	}
+}
+
 func TestRunScenario_CheckUsesRunnerJudgeAndTimeout(t *testing.T) {
 	t.Setenv(EnvVar, "1")
 

@@ -17,7 +17,7 @@ func (m StepBudget) Name() string { return "StepBudget" }
 func (m StepBudget) Score(ctx context.Context, _ Judge, c Case) (Result, error) {
 	_ = ctx
 
-	steps := len(flattenToolCalls(c.Turns))
+	steps := len(toolCallsFromCase(c))
 	if m.MaxSteps <= 0 {
 		return Result{
 			Score:  1,

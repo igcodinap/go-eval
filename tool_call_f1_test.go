@@ -57,6 +57,22 @@ func TestToolCallF1MatchesArguments(t *testing.T) {
 	}
 }
 
+func TestToolCallF1UsesTraceToolCalls(t *testing.T) {
+	c := caseWithTraceCalls(
+		[]ToolCall{{Name: "search"}, {Name: "lookup"}},
+		[]ToolCall{{Name: "search"}, {Name: "lookup"}},
+	)
+	c.Turns = []Turn{{Role: RoleAssistant, ToolCalls: []ToolCall{{Name: "turn_only"}}}}
+
+	result, err := (ToolCallF1{}).Score(context.Background(), nil, c)
+	if err != nil {
+		t.Fatalf("Score: %v", err)
+	}
+	if !result.Passed || result.Score != 1 {
+		t.Fatalf("expected trace tool calls to satisfy F1, got %+v", result)
+	}
+}
+
 func TestToolCallF1EdgeCases(t *testing.T) {
 	tests := []struct {
 		name     string

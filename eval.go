@@ -189,23 +189,24 @@ func (r *Runner) writeTrace(tb testing.TB, trace Trace) {
 	if r.traceSink == nil {
 		return
 	}
-	if trace.ID != "" {
-		r.traceMu.Lock()
-		if _, ok := r.traceSeen[trace.ID]; ok {
-			r.traceMu.Unlock()
-			return
-		}
-		r.traceSeen[trace.ID] = struct{}{}
-		r.traceMu.Unlock()
-	}
 
 	trace = r.redactTrace(trace)
 
 	r.traceMu.Lock()
+	defer r.traceMu.Unlock()
+	if trace.ID != "" {
+		if _, ok := r.traceSeen[trace.ID]; ok {
+			return
+		}
+	}
+
 	err := r.traceSink.WriteTrace(trace)
-	r.traceMu.Unlock()
 	if err != nil {
 		tb.Errorf("trace sink: %v", err)
+		return
+	}
+	if trace.ID != "" {
+		r.traceSeen[trace.ID] = struct{}{}
 	}
 }
 

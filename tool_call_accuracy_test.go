@@ -124,11 +124,42 @@ func TestToolCallAccuracyInvalidModeFailsMetric(t *testing.T) {
 	}
 }
 
+func TestToolCallAccuracyUsesTraceToolCallsWhenPresent(t *testing.T) {
+	c := caseWithTraceCalls(
+		[]ToolCall{{Name: "trace_search"}},
+		[]ToolCall{{Name: "trace_search"}},
+	)
+	c.Turns = []Turn{{Role: RoleAssistant, ToolCalls: []ToolCall{{Name: "turn_search"}}}}
+
+	result, err := (ToolCallAccuracy{}).Score(context.Background(), nil, c)
+	if err != nil {
+		t.Fatalf("Score: %v", err)
+	}
+	if !result.Passed || result.Score != 1 {
+		t.Fatalf("expected trace call to satisfy accuracy, got %+v", result)
+	}
+}
+
 func caseWithCalls(actual []ToolCall, expected []ToolCall) Case {
 	return Case{
 		Turns: []Turn{
 			{Role: RoleAssistant, ToolCalls: actual},
 		},
+		ExpectedToolCalls: expected,
+	}
+}
+
+func caseWithTraceCalls(actual []ToolCall, expected []ToolCall) Case {
+	spans := make([]Span, len(actual))
+	for i := range actual {
+		call := actual[i]
+		spans[i] = Span{
+			Kind:     "tool_call",
+			ToolCall: &call,
+		}
+	}
+	return Case{
+		Trace:             &Trace{ID: "trace-1", Spans: spans},
 		ExpectedToolCalls: expected,
 	}
 }

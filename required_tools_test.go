@@ -67,3 +67,19 @@ func TestRequiredToolsPatternFailsWhenMissing(t *testing.T) {
 		t.Fatalf("expected pattern missing failure, got %+v", result)
 	}
 }
+
+func TestRequiredToolsUsesTraceToolCalls(t *testing.T) {
+	result, err := (RequiredTools{
+		Names:    []string{"plan_route"},
+		Patterns: []string{"route_*"},
+	}).Score(context.Background(), nil, caseWithTraceCalls(
+		[]ToolCall{{Name: "plan_route"}, {Name: "route_preview"}},
+		nil,
+	))
+	if err != nil {
+		t.Fatalf("Score: %v", err)
+	}
+	if !result.Passed {
+		t.Fatalf("expected trace tool calls to satisfy requirements, got %+v", result)
+	}
+}

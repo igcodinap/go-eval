@@ -163,7 +163,7 @@ func writeMarkdownSummary(b *strings.Builder, summary ResultsSummary) {
 		fmt.Fprintf(
 			b,
 			"| %s | %d | %d | %d | %.3f | %.3f | %.1f | %d |\n",
-			row.Name,
+			markdownCell(row.Name),
 			row.Summary.Count,
 			row.Summary.Passed,
 			row.Summary.Failed,
@@ -195,15 +195,26 @@ func writeMarkdownComparison(b *strings.Builder, report Report) {
 		fmt.Fprintf(
 			b,
 			"| %s | %s | %s | %s | %+.3f | %s |\n",
-			entry.Status,
-			entry.Identity.TestName,
-			entry.Identity.CaseName,
-			entry.Identity.Metric,
+			markdownCell(string(entry.Status)),
+			markdownCell(entry.Identity.TestName),
+			markdownCell(entry.Identity.CaseName),
+			markdownCell(entry.Identity.Metric),
 			entry.Delta.Score,
-			entry.Delta.Pass,
+			markdownCell(string(entry.Delta.Pass)),
 		)
 	}
 	b.WriteString("\n")
+}
+
+func markdownCell(value string) string {
+	replacer := strings.NewReplacer(
+		`\`, `\\`,
+		`|`, `\|`,
+		"\r\n", "<br>",
+		"\n", "<br>",
+		"\r", "<br>",
+	)
+	return replacer.Replace(value)
 }
 
 func sortedReportMetricRows(groups map[string]MetricSummary) []reportMetricRow {
