@@ -115,3 +115,92 @@ func cloneRawMessage(raw json.RawMessage) json.RawMessage {
 	}
 	return append(json.RawMessage(nil), raw...)
 }
+
+func cloneTracePtr(trace *Trace) *Trace {
+	if trace == nil {
+		return nil
+	}
+	cloned := cloneTrace(trace)
+	return &cloned
+}
+
+func cloneTrace(trace *Trace) Trace {
+	if trace == nil {
+		return Trace{}
+	}
+	out := Trace{
+		ID:           trace.ID,
+		Name:         trace.Name,
+		TestName:     trace.TestName,
+		ScenarioName: trace.ScenarioName,
+		StartedAt:    trace.StartedAt,
+		EndedAt:      trace.EndedAt,
+		DurationNS:   trace.DurationNS,
+		Spans:        cloneSpans(trace.Spans),
+		Artifacts:    cloneArtifactRecords(trace.Artifacts),
+		StateDeltas:  cloneStateDeltas(trace.StateDeltas),
+		Metadata:     cloneMetadata(trace.Metadata),
+	}
+	return out
+}
+
+func cloneSpans(spans []Span) []Span {
+	if spans == nil {
+		return nil
+	}
+	out := make([]Span, len(spans))
+	for i, span := range spans {
+		out[i] = Span{
+			ID:         span.ID,
+			ParentID:   span.ParentID,
+			Name:       span.Name,
+			Kind:       span.Kind,
+			StartedAt:  span.StartedAt,
+			EndedAt:    span.EndedAt,
+			DurationNS: span.DurationNS,
+			Input:      span.Input,
+			Output:     span.Output,
+			Error:      span.Error,
+			Metadata:   cloneMetadata(span.Metadata),
+		}
+		if span.ToolCall != nil {
+			toolCall := cloneToolCalls([]ToolCall{*span.ToolCall})[0]
+			out[i].ToolCall = &toolCall
+		}
+	}
+	return out
+}
+
+func cloneArtifactRecords(records []ArtifactRecord) []ArtifactRecord {
+	if records == nil {
+		return nil
+	}
+	out := make([]ArtifactRecord, len(records))
+	for i, record := range records {
+		out[i] = ArtifactRecord{
+			Key:      record.Key,
+			Name:     record.Name,
+			MIMEType: record.MIMEType,
+			URI:      record.URI,
+			Value:    cloneRawMessage(record.Value),
+			Metadata: cloneMetadata(record.Metadata),
+		}
+	}
+	return out
+}
+
+func cloneStateDeltas(deltas []StateDelta) []StateDelta {
+	if deltas == nil {
+		return nil
+	}
+	out := make([]StateDelta, len(deltas))
+	for i, delta := range deltas {
+		out[i] = StateDelta{
+			Key:      delta.Key,
+			Before:   cloneRawMessage(delta.Before),
+			After:    cloneRawMessage(delta.After),
+			Metadata: cloneMetadata(delta.Metadata),
+		}
+	}
+	return out
+}

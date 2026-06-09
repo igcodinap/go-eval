@@ -24,6 +24,7 @@ import (
 //	      "context": ["Paris is the capital of France."],
 //	      "turns": [{"role": "user", "content": "What is the capital of France?"}],
 //	      "expected_tool_calls": [{"name": "search", "arguments": {"query": "capital of France"}}],
+//	      "trace_id": "trace-1",
 //	      "metadata": {"flow": "rag.answer", "tier": "critical", "dataset": "smoke/v1"},
 //	      "artifacts": {"state": {"status": "ready"}}
 //	    }
@@ -89,6 +90,8 @@ func (c NamedCase) MarshalJSON() ([]byte, error) {
 		Context:           c.Case.Context,
 		Turns:             c.Case.Turns,
 		ExpectedToolCalls: c.Case.ExpectedToolCalls,
+		TraceID:           c.Case.TraceID,
+		Trace:             c.Case.Trace,
 		Metadata:          c.Case.Metadata,
 		Artifacts:         c.Case.Artifacts,
 	})
@@ -112,6 +115,8 @@ func (c *NamedCase) UnmarshalJSON(data []byte) error {
 		Context:           raw.Context,
 		Turns:             raw.Turns,
 		ExpectedToolCalls: raw.ExpectedToolCalls,
+		TraceID:           raw.TraceID,
+		Trace:             cloneTracePtr(raw.Trace),
 		Metadata:          raw.Metadata,
 		Artifacts:         raw.Artifacts,
 	}
@@ -126,6 +131,8 @@ type namedCaseJSON struct {
 	Context           []string                   `json:"context,omitempty"`
 	Turns             []Turn                     `json:"turns,omitempty"`
 	ExpectedToolCalls []ToolCall                 `json:"expected_tool_calls,omitempty"`
+	TraceID           string                     `json:"trace_id,omitempty"`
+	Trace             *Trace                     `json:"trace,omitempty"`
 	Metadata          map[string]any             `json:"metadata,omitempty"`
 	Artifacts         map[string]json.RawMessage `json:"artifacts,omitempty"`
 }

@@ -1,6 +1,7 @@
 package eval
 
 import (
+	"encoding/json"
 	"regexp"
 	"strconv"
 	"strings"
@@ -75,6 +76,62 @@ func (r *Runner) applyRedactors(path string, value string) string {
 	return value
 }
 
+func (r *Runner) redactTrace(trace Trace) Trace {
+	if len(r.redactors) == 0 {
+		return trace
+	}
+	out := trace
+	out.Name = r.applyRedactors("trace.name", out.Name)
+	out.TestName = r.applyRedactors("trace.test_name", out.TestName)
+	out.ScenarioName = r.applyRedactors("trace.scenario_name", out.ScenarioName)
+	out.Metadata = redactMetadata(r.redactors, "trace.metadata", trace.Metadata)
+	if len(trace.Spans) > 0 {
+		out.Spans = make([]Span, len(trace.Spans))
+		copy(out.Spans, trace.Spans)
+		for i := range out.Spans {
+			path := "trace.spans." + strconv.Itoa(i)
+			out.Spans[i].Name = r.applyRedactors(path+".name", out.Spans[i].Name)
+			out.Spans[i].Input = r.applyRedactors(path+".input", out.Spans[i].Input)
+			out.Spans[i].Output = r.applyRedactors(path+".output", out.Spans[i].Output)
+			out.Spans[i].Error = r.applyRedactors(path+".error", out.Spans[i].Error)
+			out.Spans[i].Metadata = redactMetadata(r.redactors, path+".metadata", trace.Spans[i].Metadata)
+			if trace.Spans[i].ToolCall != nil {
+				call := *trace.Spans[i].ToolCall
+				call.Name = r.applyRedactors(path+".tool_call.name", call.Name)
+				call.Result = r.applyRedactors(path+".tool_call.result", call.Result)
+				call.Error = r.applyRedactors(path+".tool_call.error", call.Error)
+				call.Arguments = redactRawJSON(r.redactors, path+".tool_call.arguments", call.Arguments)
+				call.Metadata = redactMetadata(r.redactors, path+".tool_call.metadata", call.Metadata)
+				out.Spans[i].ToolCall = &call
+			}
+		}
+	}
+	if len(trace.Artifacts) > 0 {
+		out.Artifacts = make([]ArtifactRecord, len(trace.Artifacts))
+		copy(out.Artifacts, trace.Artifacts)
+		for i := range out.Artifacts {
+			path := "trace.artifacts." + strconv.Itoa(i)
+			out.Artifacts[i].Key = r.applyRedactors(path+".key", out.Artifacts[i].Key)
+			out.Artifacts[i].Name = r.applyRedactors(path+".name", out.Artifacts[i].Name)
+			out.Artifacts[i].URI = r.applyRedactors(path+".uri", out.Artifacts[i].URI)
+			out.Artifacts[i].Value = redactRawJSON(r.redactors, path+".value", out.Artifacts[i].Value)
+			out.Artifacts[i].Metadata = redactMetadata(r.redactors, path+".metadata", trace.Artifacts[i].Metadata)
+		}
+	}
+	if len(trace.StateDeltas) > 0 {
+		out.StateDeltas = make([]StateDelta, len(trace.StateDeltas))
+		copy(out.StateDeltas, trace.StateDeltas)
+		for i := range out.StateDeltas {
+			path := "trace.state_deltas." + strconv.Itoa(i)
+			out.StateDeltas[i].Key = r.applyRedactors(path+".key", out.StateDeltas[i].Key)
+			out.StateDeltas[i].Before = redactRawJSON(r.redactors, path+".before", out.StateDeltas[i].Before)
+			out.StateDeltas[i].After = redactRawJSON(r.redactors, path+".after", out.StateDeltas[i].After)
+			out.StateDeltas[i].Metadata = redactMetadata(r.redactors, path+".metadata", trace.StateDeltas[i].Metadata)
+		}
+	}
+	return out
+}
+
 func redactMetadata(redactors []Redactor, path string, metadata map[string]any) map[string]any {
 	if metadata == nil {
 		return nil
@@ -145,6 +202,22 @@ func redactString(redactors []Redactor, path string, value string) string {
 		value = redactor(path, value)
 	}
 	return value
+}
+
+func redactRawJSON(redactors []Redactor, path string, raw json.RawMessage) json.RawMessage {
+	if len(raw) == 0 {
+		return nil
+	}
+	var value any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return cloneRawMessage(raw)
+	}
+	redacted := redactAny(redactors, path, value)
+	out, err := json.Marshal(redacted)
+	if err != nil {
+		return cloneRawMessage(raw)
+	}
+	return out
 }
 
 func redactScenarioSummary(redactors []Redactor, summary *ScenarioSummary) *ScenarioSummary {

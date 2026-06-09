@@ -23,10 +23,13 @@ type Runner struct {
 	judge      Judge
 	timeout    time.Duration
 	sink       ResultSink
+	traceSink  TraceSink
 	redactors  []Redactor
 	caseFilter func(Case) bool
 	tierFilter []string
+	traceSeen  map[string]struct{}
 	sinkMu     sync.Mutex
+	traceMu    sync.Mutex
 }
 
 // Option configures a Runner at construction time.
@@ -67,8 +70,9 @@ func DefaultTierFilter() Option {
 // NewRunner returns a Runner bound to the provided Judge.
 func NewRunner(j Judge, opts ...Option) *Runner {
 	r := &Runner{
-		judge:   j,
-		timeout: 30 * time.Second,
+		judge:     j,
+		timeout:   30 * time.Second,
+		traceSeen: map[string]struct{}{},
 	}
 	for _, opt := range opts {
 		opt(r)
@@ -111,6 +115,7 @@ func (r *Runner) Run(tb testing.TB, m Metric, c Case) Result {
 	if result.Metric == "" {
 		result.Metric = m.Name()
 	}
+	r.attachTrace(tb, tb.Name(), c, &result)
 	if result.Latency == 0 {
 		result.Latency = time.Since(start)
 	}
@@ -151,6 +156,56 @@ func (r *Runner) writeRunResult(tb testing.TB, runResult RunResult) {
 	r.sinkMu.Unlock()
 	if err != nil {
 		tb.Errorf("result sink: %v", err)
+	}
+}
+
+func (r *Runner) attachTrace(tb testing.TB, testName string, c Case, result *Result) {
+	tb.Helper()
+	if result == nil {
+		return
+	}
+	traceID := c.TraceID
+	if c.Trace != nil {
+		trace := cloneTrace(c.Trace)
+		if trace.ID == "" && traceID != "" {
+			trace.ID = traceID
+		}
+		traceID = ensureTraceID(&trace)
+		if trace.TestName == "" {
+			trace.TestName = testName
+		}
+		if trace.Name == "" {
+			trace.Name = testName
+		}
+		r.writeTrace(tb, trace)
+	}
+	if result.TraceID == "" {
+		result.TraceID = traceID
+	}
+}
+
+func (r *Runner) writeTrace(tb testing.TB, trace Trace) {
+	tb.Helper()
+	if r.traceSink == nil {
+		return
+	}
+	if trace.ID != "" {
+		r.traceMu.Lock()
+		if _, ok := r.traceSeen[trace.ID]; ok {
+			r.traceMu.Unlock()
+			return
+		}
+		r.traceSeen[trace.ID] = struct{}{}
+		r.traceMu.Unlock()
+	}
+
+	trace = r.redactTrace(trace)
+
+	r.traceMu.Lock()
+	err := r.traceSink.WriteTrace(trace)
+	r.traceMu.Unlock()
+	if err != nil {
+		tb.Errorf("trace sink: %v", err)
 	}
 }
 

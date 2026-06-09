@@ -30,6 +30,7 @@ type Result struct {
 	Reason           string
 	Passed           bool
 	Metric           string
+	TraceID          string
 	Latency          time.Duration
 	Tokens           int
 	PromptTokens     int

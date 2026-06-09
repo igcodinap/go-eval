@@ -7,26 +7,28 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 )
 
 // ScenarioRepeat configures repeated full-scenario execution.
 type ScenarioRepeat struct {
-	N        int
-	PassRate float64
+	N        int     `json:"n,omitempty"`
+	PassRate float64 `json:"pass_rate,omitempty"`
 }
 
 // Scenario describes a sequential multi-step agent evaluation.
 type Scenario struct {
-	Name     string
-	Tier     string
-	Metadata map[string]any
-	State    map[string]any
-	Tools    ToolRegistry
-	Driver   StepFunc
-	Steps    []Step
-	Repeat   ScenarioRepeat
+	Name       string
+	Tier       string
+	DriverName string
+	Metadata   map[string]any
+	State      map[string]any
+	Tools      ToolRegistry
+	Driver     StepFunc
+	Steps      []Step
+	Repeat     ScenarioRepeat
 }
 
 // Step describes one user interaction and its expected agent behavior.
@@ -38,6 +40,8 @@ type Step struct {
 	ForbiddenTools        []string
 	ForbiddenToolPatterns []string
 	ForbiddenToolExcept   []string
+	RequiredArtifacts     []string
+	ForbiddenArtifacts    []string
 	MaxToolCalls          int
 	ExpectFail            bool
 	Checks                []Metric
@@ -60,6 +64,7 @@ type StepFunc func(ctx context.Context, req StepRequest) (StepResult, error)
 type StepResult struct {
 	Output    string
 	Turns     []Turn
+	Trace     *Trace
 	Artifacts map[string]json.RawMessage
 	Metadata  map[string]any
 	State     map[string]any
@@ -70,6 +75,8 @@ type ScenarioResult struct {
 	Passed     bool
 	Results    []Result
 	Turns      []Turn
+	TraceID    string
+	TraceIDs   []string
 	Artifacts  map[string]json.RawMessage
 	RunCount   int
 	PassRuns   int
@@ -125,6 +132,7 @@ func (r *Runner) RunScenario(tb testing.TB, s Scenario) ScenarioResult {
 		}
 		out.Results = append(out.Results, run.result.Results...)
 		out.Turns = cloneTurns(run.result.Turns)
+		out.TraceIDs = append(out.TraceIDs, run.result.TraceID)
 		out.Artifacts = cloneArtifacts(run.result.Artifacts)
 		summaries = append(summaries, run.steps...)
 		if run.result.Passed {
@@ -157,6 +165,7 @@ func (r *Runner) runScenarioOnce(
 	artifacts := map[string]json.RawMessage{}
 	state := cloneMetadata(s.State)
 	var summaries []StepSummary
+	trace := newScenarioTrace(tb.Name(), s, repeatRun, repeatTotal)
 
 	for _, step := range s.Steps {
 		stepResult, ok := r.runScenarioStep(tb, s, step, history, artifacts, state)
@@ -165,6 +174,7 @@ func (r *Runner) runScenarioOnce(
 		}
 
 		stepTurns := cloneTurns(stepResult.Turns)
+		appendScenarioStepTrace(&trace, step, stepResult, repeatRun)
 		history = append(history, stepTurns...)
 		mergeArtifacts(artifacts, stepResult.Artifacts)
 		state = mergeMetadata(state, stepResult.State)
@@ -174,6 +184,8 @@ func (r *Runner) runScenarioOnce(
 			Input:     step.Input,
 			Output:    stepResult.Output,
 			Turns:     cloneTurns(stepTurns),
+			TraceID:   trace.ID,
+			Trace:     &trace,
 			Metadata:  stepMetadata,
 			Artifacts: cloneArtifacts(artifacts),
 			Timeout:   step.Timeout,
@@ -198,7 +210,10 @@ func (r *Runner) runScenarioOnce(
 	}
 
 	out.Turns = cloneTurns(history)
+	out.TraceID = trace.ID
+	out.TraceIDs = []string{trace.ID}
 	out.Artifacts = cloneArtifacts(artifacts)
+	r.writeTrace(tb, trace)
 	return scenarioRunResult{result: out, steps: summaries}, true
 }
 
@@ -208,6 +223,13 @@ func validateScenario(s Scenario) error {
 	}
 	if s.Driver == nil {
 		return errors.New("driver is required")
+	}
+	return validateScenarioDefinition(s)
+}
+
+func validateScenarioDefinition(s Scenario) error {
+	if s.Name == "" {
+		return errors.New("name is required")
 	}
 	if err := s.Tools.Validate(); err != nil {
 		return fmt.Errorf("tool registry: %w", err)
@@ -234,10 +256,25 @@ func validateScenario(s Scenario) error {
 		if err := validateToolPatterns(step.ForbiddenToolPatterns); err != nil {
 			return fmt.Errorf("step %q: %w", step.Name, err)
 		}
+		if err := validateArtifactKeys("required artifact", step.RequiredArtifacts); err != nil {
+			return fmt.Errorf("step %q: %w", step.Name, err)
+		}
+		if err := validateArtifactKeys("forbidden artifact", step.ForbiddenArtifacts); err != nil {
+			return fmt.Errorf("step %q: %w", step.Name, err)
+		}
 		for j, check := range step.Checks {
 			if check == nil {
 				return fmt.Errorf("step %q: check %d is nil", step.Name, j+1)
 			}
+		}
+	}
+	return nil
+}
+
+func validateArtifactKeys(label string, keys []string) error {
+	for i, key := range keys {
+		if strings.TrimSpace(key) == "" {
+			return fmt.Errorf("%s %d is empty", label, i+1)
 		}
 	}
 	return nil
@@ -287,6 +324,7 @@ func (r *Runner) runScenarioStep(
 	return StepResult{
 		Output:    stepResult.Output,
 		Turns:     cloneTurns(stepResult.Turns),
+		Trace:     cloneTracePtr(stepResult.Trace),
 		Artifacts: cloneArtifacts(stepResult.Artifacts),
 		Metadata:  cloneMetadata(stepResult.Metadata),
 		State:     cloneMetadata(stepResult.State),
@@ -333,6 +371,12 @@ func scenarioStepMetrics(registry ToolRegistry, step Step) []Metric {
 	if step.MaxToolCalls > 0 {
 		metrics = append(metrics, StepBudget{MaxSteps: step.MaxToolCalls})
 	}
+	for _, key := range step.RequiredArtifacts {
+		metrics = append(metrics, ArtifactExists{Key: key})
+	}
+	for _, key := range step.ForbiddenArtifacts {
+		metrics = append(metrics, ArtifactNotExists{Key: key})
+	}
 	return metrics
 }
 
@@ -347,6 +391,9 @@ func (r *Runner) scoreScenarioMetric(tb testing.TB, metric Metric, step Step, c 
 	result.Metadata = mergeMetadata(c.Metadata, result.Metadata)
 	if result.Metric == "" {
 		result.Metric = metric.Name()
+	}
+	if result.TraceID == "" {
+		result.TraceID = c.TraceID
 	}
 	if result.Latency == 0 {
 		result.Latency = time.Since(start)
@@ -474,6 +521,8 @@ func cloneStep(step Step) Step {
 		ForbiddenTools:        append([]string(nil), step.ForbiddenTools...),
 		ForbiddenToolPatterns: append([]string(nil), step.ForbiddenToolPatterns...),
 		ForbiddenToolExcept:   append([]string(nil), step.ForbiddenToolExcept...),
+		RequiredArtifacts:     append([]string(nil), step.RequiredArtifacts...),
+		ForbiddenArtifacts:    append([]string(nil), step.ForbiddenArtifacts...),
 		MaxToolCalls:          step.MaxToolCalls,
 		ExpectFail:            step.ExpectFail,
 		Checks:                append([]Metric(nil), step.Checks...),
@@ -577,6 +626,7 @@ func (r *Runner) writeScenarioSummary(tb testing.TB, s Scenario, result Scenario
 		Score:      score,
 		Passed:     result.Passed,
 		Metric:     "_scenario_summary",
+		TraceID:    result.TraceID,
 		Reason:     reason,
 		Dimensions: result.Dimensions,
 		Metadata:   metadata,
@@ -588,6 +638,7 @@ func (r *Runner) writeScenarioSummary(tb testing.TB, s Scenario, result Scenario
 		Passed:       result.Passed,
 		RunCount:     result.RunCount,
 		PassRuns:     result.PassRuns,
+		TraceIDs:     append([]string(nil), result.TraceIDs...),
 		Steps:        steps,
 		Metadata:     metadata,
 		ArtifactKeys: sortedArtifactKeys(result.Artifacts),
@@ -598,6 +649,70 @@ func (r *Runner) writeScenarioSummary(tb testing.TB, s Scenario, result Scenario
 
 func scenarioSummaryTestName(tbName string, scenarioName string) string {
 	return tbName + "/" + scenarioName
+}
+
+func newScenarioTrace(tbName string, s Scenario, repeatRun int, repeatTotal int) Trace {
+	metadata := scenarioBaseMetadata(s)
+	if repeatRun > 0 {
+		metadata["repeat_run"] = repeatRun
+		metadata["repeat_total"] = repeatTotal
+	}
+	trace := Trace{
+		ID:           newTraceID(),
+		Name:         s.Name,
+		TestName:     scenarioSummaryTestName(tbName, s.Name),
+		ScenarioName: s.Name,
+		StartedAt:    time.Now().UTC().Format(time.RFC3339Nano),
+		Metadata:     metadata,
+	}
+	return trace
+}
+
+func appendScenarioStepTrace(trace *Trace, step Step, result StepResult, repeatRun int) {
+	if trace == nil {
+		return
+	}
+	span := Span{
+		ID:       trace.ID + "/" + step.Name,
+		Name:     step.Name,
+		Kind:     "scenario_step",
+		Input:    step.Input,
+		Output:   result.Output,
+		Metadata: mergeMetadata(step.Metadata, result.Metadata),
+	}
+	if repeatRun > 0 {
+		span.Metadata = mergeMetadata(span.Metadata, map[string]any{"repeat_run": repeatRun})
+	}
+	trace.Spans = append(trace.Spans, span)
+	for _, call := range flattenToolCalls(result.Turns) {
+		toolCall := call
+		trace.Spans = append(trace.Spans, Span{
+			ID:       trace.ID + "/" + step.Name + "/tool/" + call.Name,
+			ParentID: span.ID,
+			Name:     call.Name,
+			Kind:     "tool_call",
+			ToolCall: &toolCall,
+			Error:    call.Error,
+			Metadata: cloneMetadata(call.Metadata),
+		})
+	}
+	for key, value := range result.Artifacts {
+		trace.Artifacts = append(trace.Artifacts, ArtifactRecord{
+			Key:   key,
+			Name:  key,
+			Value: cloneRawMessage(value),
+			Metadata: map[string]any{
+				"step": step.Name,
+			},
+		})
+	}
+	if result.Trace != nil {
+		trace.Spans = append(trace.Spans, cloneSpans(result.Trace.Spans)...)
+		trace.Artifacts = append(trace.Artifacts, cloneArtifactRecords(result.Trace.Artifacts)...)
+		trace.StateDeltas = append(trace.StateDeltas, cloneStateDeltas(result.Trace.StateDeltas)...)
+		trace.Metadata = mergeMetadata(trace.Metadata, result.Trace.Metadata)
+	}
+	trace.EndedAt = time.Now().UTC().Format(time.RFC3339Nano)
 }
 
 type toolRegistryMetric struct {

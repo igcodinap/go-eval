@@ -511,6 +511,153 @@ func TestRunSummarizeUsesConfigPolicy(t *testing.T) {
 	}
 }
 
+func TestRunReportWritesHTML(t *testing.T) {
+	path := writeResultFile(t,
+		`{"test_name":"TestEval/a","metric":"Faithfulness","score":1,"passed":true}`+"\n",
+	)
+	outPath := filepath.Join(t.TempDir(), "report.html")
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(context.Background(), []string{"report", path, "--out", outPath}, nil, nil, &stdout, &stderr, nil)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr=%q", code, stderr.String())
+	}
+	data, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("ReadFile report: %v", err)
+	}
+	if !strings.Contains(string(data), "go-eval report") || !strings.Contains(string(data), "Faithfulness") {
+		t.Fatalf("html report missing expected content:\n%s", data)
+	}
+	if !strings.Contains(stdout.String(), "wrote ") {
+		t.Fatalf("stdout missing write confirmation: %q", stdout.String())
+	}
+}
+
+func TestRunReportComparisonJSONToStdout(t *testing.T) {
+	baseline := writeResultFile(t,
+		`{"test_name":"TestEval/a","metric":"Faithfulness","score":1,"passed":true}`+"\n",
+	)
+	current := writeResultFile(t,
+		`{"test_name":"TestEval/a","metric":"Faithfulness","score":0,"passed":false}`+"\n",
+	)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(context.Background(), []string{"report", "--format", "json", "--baseline", baseline, "--current", current}, nil, nil, &stdout, &stderr, nil)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr=%q", code, stderr.String())
+	}
+	out := stdout.String()
+	if !strings.Contains(out, `"Comparison"`) || !strings.Contains(out, `"Regressed": 1`) {
+		t.Fatalf("json report missing comparison:\n%s", out)
+	}
+}
+
+func TestRunReportMarkdownFormat(t *testing.T) {
+	path := writeResultFile(t,
+		`{"test_name":"TestEval/a","metric":"Faithfulness","score":1,"passed":true}`+"\n",
+	)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(context.Background(), []string{"report", "--format", "markdown", path}, nil, nil, &stdout, &stderr, nil)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "# go-eval report") || !strings.Contains(stdout.String(), "| Faithfulness |") {
+		t.Fatalf("markdown report missing expected content:\n%s", stdout.String())
+	}
+}
+
+func TestRunReportRejectsUnsupportedOutExtensionWithoutFormat(t *testing.T) {
+	path := writeResultFile(t,
+		`{"test_name":"TestEval/a","metric":"Faithfulness","score":1,"passed":true}`+"\n",
+	)
+	outPath := filepath.Join(t.TempDir(), "report.txt")
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(context.Background(), []string{"report", path, "--out", outPath}, nil, nil, &stdout, &stderr, nil)
+
+	if code != 2 {
+		t.Fatalf("exit code = %d, want 2", code)
+	}
+	if !strings.Contains(stderr.String(), "--format is required") {
+		t.Fatalf("stderr missing format error:\n%s", stderr.String())
+	}
+}
+
+func TestRunReportFormatOverridesUnsupportedOutExtension(t *testing.T) {
+	path := writeResultFile(t,
+		`{"test_name":"TestEval/a","metric":"Faithfulness","score":1,"passed":true}`+"\n",
+	)
+	outPath := filepath.Join(t.TempDir(), "report.txt")
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(context.Background(), []string{"report", "--format", "markdown", path, "--out", outPath}, nil, nil, &stdout, &stderr, nil)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr=%q", code, stderr.String())
+	}
+	data, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("ReadFile report: %v", err)
+	}
+	if !strings.Contains(string(data), "# go-eval report") {
+		t.Fatalf("format override did not write markdown:\n%s", data)
+	}
+}
+
+func TestRunCalibrateReportsDisagreements(t *testing.T) {
+	path := writeResultFile(t,
+		`{"test_name":"TestEval/one","metric":"Faithfulness","score":0.9,"passed":true,"metadata":{"case_id":"a","judge":"judge-a"}}`+"\n"+
+			`{"test_name":"TestEval/two","metric":"Faithfulness","score":0.3,"passed":false,"metadata":{"case_id":"a","judge":"judge-b"}}`+"\n",
+	)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(context.Background(), []string{"calibrate", "--case-id-key", "case_id", path}, nil, nil, &stdout, &stderr, nil)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr=%q", code, stderr.String())
+	}
+	out := stdout.String()
+	for _, want := range []string{
+		"Summary: groups=1 disagreements=1 judges=2",
+		"disagreement\tcase=a\tmetric=Faithfulness",
+		"judge-a=0.900/true",
+		"judge-b=0.300/false",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("stdout missing %q in:\n%s", want, out)
+		}
+	}
+}
+
+func TestRunCalibrateJSONAndPairwiseVariants(t *testing.T) {
+	path := writeResultFile(t,
+		`{"test_name":"TestEval/a","metric":"AnswerCorrectness","score":0.9,"passed":true,"metadata":{"variant":"A"}}`+"\n"+
+			`{"test_name":"TestEval/a","metric":"AnswerCorrectness","score":0.7,"passed":true,"metadata":{"variant":"B"}}`+"\n",
+	)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(context.Background(), []string{"calibrate", "--format", "json", "--pairwise-key", "variant", path}, nil, nil, &stdout, &stderr, nil)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"Pairwise"`) || !strings.Contains(stdout.String(), `"Left": "A"`) {
+		t.Fatalf("json calibration missing pairwise report:\n%s", stdout.String())
+	}
+}
+
 func TestRunVersion(t *testing.T) {
 	oldVersion := version
 	version = "test-version"
@@ -540,6 +687,8 @@ func TestRunUsageErrors(t *testing.T) {
 		{name: "unknown command", args: []string{"wat"}, want: `unknown command "wat"`},
 		{name: "compare arity", args: []string{"compare", "old.jsonl"}, want: "usage: goeval compare"},
 		{name: "summarize arity", args: []string{"summarize"}, want: "usage: goeval summarize"},
+		{name: "report arity", args: []string{"report"}, want: "usage: goeval report"},
+		{name: "calibrate arity", args: []string{"calibrate"}, want: "usage: goeval calibrate"},
 	}
 
 	for _, tt := range tests {

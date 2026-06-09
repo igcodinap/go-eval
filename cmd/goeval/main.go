@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -24,12 +25,17 @@ const usage = `Usage:
   goeval test [--profile <name>] [--config <path>] [go test args...]
   goeval compare [--policy <path>] [--config <path>] [--case-id-key <key>] [--score-tolerance <float>] [--fail-on-regression=<bool>] [--format text|json] <baseline.jsonl> <current.jsonl>
   goeval summarize [--policy <path>] [--config <path>] [--case-id-key <key>] <results.jsonl>
+  goeval report [--format html|markdown|json] [--out <path>] <results.jsonl>
+  goeval report [--format html|markdown|json] [--out <path>] --baseline <baseline.jsonl> --current <current.jsonl>
+  goeval calibrate [--judge-key <key>] [--case-id-key <key>] [--pairwise-key <key>] [--score-tolerance <float>] [--format text|json] <results.jsonl>
   goeval version
 
 Commands:
   test       Run go test with GOEVAL=1 set.
   compare    Compare two go-eval JSONL result files.
   summarize  Summarize one go-eval JSONL result file.
+  report     Render a static report from result JSONL.
+  calibrate  Summarize judge disagreement from result JSONL.
   version    Print the goeval CLI version.
 `
 
@@ -54,6 +60,10 @@ func run(ctx context.Context, args []string, baseEnv []string, stdin io.Reader, 
 		return runCompare(args[1:], stdout, stderr)
 	case "summarize":
 		return runSummarize(args[1:], stdout, stderr)
+	case "report":
+		return runReport(args[1:], stdout, stderr)
+	case "calibrate":
+		return runCalibrate(args[1:], stdout, stderr)
 	case "version":
 		return runVersion(stdout)
 	default:
@@ -224,6 +234,99 @@ func runSummarize(args []string, stdout io.Writer, stderr io.Writer) int {
 	return 0
 }
 
+func runReport(args []string, stdout io.Writer, stderr io.Writer) int {
+	parsed, err := parseReportArgs(args)
+	if err != nil {
+		writef(stderr, "report: %v\n", err)
+		return 2
+	}
+
+	format := parsed.format
+	if format == "" {
+		format, err = inferReportFormat(parsed.outPath)
+		if err != nil {
+			writef(stderr, "report: %v\n", err)
+			return 2
+		}
+	}
+
+	var report compare.StaticReport
+	if parsed.baselinePath != "" || parsed.currentPath != "" {
+		if parsed.baselinePath == "" || parsed.currentPath == "" {
+			writef(stderr, "report: --baseline and --current must be used together\n")
+			return 2
+		}
+		comparison, err := compare.CompareFiles(parsed.baselinePath, parsed.currentPath)
+		if err != nil {
+			writef(stderr, "report: compare: %v\n", err)
+			return 1
+		}
+		summary, err := compare.SummarizeFile(parsed.currentPath)
+		if err != nil {
+			writef(stderr, "report: summarize current: %v\n", err)
+			return 1
+		}
+		report = compare.NewComparisonReport(parsed.baselinePath, parsed.currentPath, summary, comparison)
+	} else {
+		summary, err := compare.SummarizeFile(parsed.resultPath)
+		if err != nil {
+			writef(stderr, "report: summarize: %v\n", err)
+			return 1
+		}
+		report = compare.NewResultsReport(parsed.resultPath, summary)
+	}
+
+	rendered, err := renderStaticReport(report, format)
+	if err != nil {
+		writef(stderr, "report: render: %v\n", err)
+		return 1
+	}
+	if parsed.outPath == "" {
+		_, _ = stdout.Write(rendered)
+		if len(rendered) == 0 || rendered[len(rendered)-1] != '\n' {
+			writeln(stdout)
+		}
+		return 0
+	}
+	if err := os.WriteFile(parsed.outPath, rendered, 0o644); err != nil {
+		writef(stderr, "report: write %q: %v\n", parsed.outPath, err)
+		return 1
+	}
+	writef(stdout, "wrote %s\n", parsed.outPath)
+	return 0
+}
+
+func runCalibrate(args []string, stdout io.Writer, stderr io.Writer) int {
+	parsed, err := parseCalibrateArgs(args)
+	if err != nil {
+		writef(stderr, "calibrate: %v\n", err)
+		return 2
+	}
+
+	report, err := compare.CalibrateFile(parsed.resultPath, compare.CalibrationOptions{
+		CaseIDKey:      parsed.caseIDKey,
+		JudgeKey:       parsed.judgeKey,
+		VariantKey:     parsed.pairwiseKey,
+		ScoreTolerance: parsed.scoreTolerance,
+	})
+	if err != nil {
+		writef(stderr, "calibrate: %v\n", err)
+		return 1
+	}
+
+	if parsed.format == "json" {
+		enc := json.NewEncoder(stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(report); err != nil {
+			writef(stderr, "calibrate: encode json: %v\n", err)
+			return 1
+		}
+		return 0
+	}
+	printCalibrationReport(stdout, report)
+	return 0
+}
+
 func runVersion(stdout io.Writer) int {
 	writef(stdout, "goeval %s\n", version)
 	return 0
@@ -271,6 +374,79 @@ func printSummaryReport(w io.Writer, summary compare.ResultsSummary) {
 	printSummaryGroups(w, "case", summary.ByCase)
 	for _, flaky := range summary.Flaky {
 		printFlakySummary(w, flaky)
+	}
+}
+
+func printCalibrationReport(w io.Writer, report compare.CalibrationReport) {
+	writef(
+		w,
+		"Summary: groups=%d disagreements=%d judges=%d pairwise=%d\n",
+		report.Summary.TotalGroups,
+		report.Summary.DisagreementGroups,
+		report.Summary.JudgeCount,
+		report.Summary.PairwiseCount,
+	)
+	for _, disagreement := range report.Disagreements {
+		writeString(w, "disagreement")
+		if disagreement.Identity.TestName != "" {
+			writef(w, "\ttest=%s", disagreement.Identity.TestName)
+		}
+		if disagreement.Identity.CaseName != "" {
+			writef(w, "\tcase=%s", disagreement.Identity.CaseName)
+		}
+		writef(
+			w,
+			"\tmetric=%s\tscore_range=%.3f\tpass_disagreement=%t\tscore_disagreement=%t",
+			disagreement.Identity.Metric,
+			disagreement.ScoreRange,
+			disagreement.PassDisagreement,
+			disagreement.ScoreDisagreement,
+		)
+		for _, judge := range disagreement.Judges {
+			writef(w, "\t%s=%.3f/%t", judge.Judge, judge.Score, judge.Passed)
+		}
+		writeln(w)
+	}
+	for _, pairwise := range report.Pairwise {
+		writef(
+			w,
+			"pairwise\t%s_vs_%s\tcount=%d\tleft_wins=%d\tright_wins=%d\tties=%d\tmean_score_delta=%+.3f\n",
+			pairwise.Left,
+			pairwise.Right,
+			pairwise.Count,
+			pairwise.LeftWins,
+			pairwise.RightWins,
+			pairwise.Ties,
+			pairwise.MeanScoreDelta,
+		)
+	}
+}
+
+func renderStaticReport(report compare.StaticReport, format string) ([]byte, error) {
+	switch format {
+	case "html":
+		return compare.ReportHTML(report)
+	case "markdown":
+		return compare.ReportMarkdown(report)
+	case "json":
+		return compare.ReportJSON(report)
+	default:
+		return nil, fmt.Errorf("--format must be html, markdown, or json")
+	}
+}
+
+func inferReportFormat(outPath string) (string, error) {
+	switch strings.ToLower(filepath.Ext(outPath)) {
+	case "":
+		return "html", nil
+	case ".html", ".htm":
+		return "html", nil
+	case ".md", ".markdown":
+		return "markdown", nil
+	case ".json":
+		return "json", nil
+	default:
+		return "", errors.New("--format is required when --out extension is not .html, .htm, .md, .markdown, or .json")
 	}
 }
 
@@ -432,6 +608,23 @@ type summarizeCommandArgs struct {
 	caseIDKey  string
 }
 
+type reportCommandArgs struct {
+	resultPath   string
+	baselinePath string
+	currentPath  string
+	outPath      string
+	format       string
+}
+
+type calibrateCommandArgs struct {
+	resultPath     string
+	judgeKey       string
+	caseIDKey      string
+	pairwiseKey    string
+	scoreTolerance float64
+	format         string
+}
+
 func parseTestArgs(args []string) (string, string, []string, error) {
 	var profile string
 	var config string
@@ -500,6 +693,140 @@ func parseSummarizeArgs(args []string) (summarizeCommandArgs, error) {
 	}
 	if len(positionals) != 1 {
 		return parsed, errors.New("usage: goeval summarize <results.jsonl>")
+	}
+	parsed.resultPath = positionals[0]
+	return parsed, nil
+}
+
+func parseReportArgs(args []string) (reportCommandArgs, error) {
+	var parsed reportCommandArgs
+	var positionals []string
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "--out":
+			i++
+			if i >= len(args) {
+				return parsed, errors.New("--out requires a value")
+			}
+			parsed.outPath = args[i]
+		case strings.HasPrefix(arg, "--out="):
+			parsed.outPath = strings.TrimPrefix(arg, "--out=")
+		case arg == "--format":
+			i++
+			if i >= len(args) {
+				return parsed, errors.New("--format requires a value")
+			}
+			parsed.format = args[i]
+		case strings.HasPrefix(arg, "--format="):
+			parsed.format = strings.TrimPrefix(arg, "--format=")
+		case arg == "--baseline":
+			i++
+			if i >= len(args) {
+				return parsed, errors.New("--baseline requires a value")
+			}
+			parsed.baselinePath = args[i]
+		case strings.HasPrefix(arg, "--baseline="):
+			parsed.baselinePath = strings.TrimPrefix(arg, "--baseline=")
+		case arg == "--current":
+			i++
+			if i >= len(args) {
+				return parsed, errors.New("--current requires a value")
+			}
+			parsed.currentPath = args[i]
+		case strings.HasPrefix(arg, "--current="):
+			parsed.currentPath = strings.TrimPrefix(arg, "--current=")
+		case strings.HasPrefix(arg, "-"):
+			return parsed, fmt.Errorf("unknown flag %q", arg)
+		default:
+			positionals = append(positionals, arg)
+		}
+	}
+	if parsed.format != "" && parsed.format != "html" && parsed.format != "markdown" && parsed.format != "json" {
+		return parsed, errors.New("--format must be html, markdown, or json")
+	}
+	if parsed.baselinePath != "" || parsed.currentPath != "" {
+		if len(positionals) != 0 {
+			return parsed, errors.New("usage: goeval report --baseline <baseline.jsonl> --current <current.jsonl>")
+		}
+		return parsed, nil
+	}
+	if len(positionals) != 1 {
+		return parsed, errors.New("usage: goeval report <results.jsonl>")
+	}
+	parsed.resultPath = positionals[0]
+	return parsed, nil
+}
+
+func parseCalibrateArgs(args []string) (calibrateCommandArgs, error) {
+	parsed := calibrateCommandArgs{
+		judgeKey:       "judge",
+		scoreTolerance: 0.05,
+		format:         "text",
+	}
+	var positionals []string
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "--judge-key":
+			i++
+			if i >= len(args) {
+				return parsed, errors.New("--judge-key requires a value")
+			}
+			parsed.judgeKey = args[i]
+		case strings.HasPrefix(arg, "--judge-key="):
+			parsed.judgeKey = strings.TrimPrefix(arg, "--judge-key=")
+		case arg == "--case-id-key":
+			i++
+			if i >= len(args) {
+				return parsed, errors.New("--case-id-key requires a value")
+			}
+			parsed.caseIDKey = args[i]
+		case strings.HasPrefix(arg, "--case-id-key="):
+			parsed.caseIDKey = strings.TrimPrefix(arg, "--case-id-key=")
+		case arg == "--pairwise-key":
+			i++
+			if i >= len(args) {
+				return parsed, errors.New("--pairwise-key requires a value")
+			}
+			parsed.pairwiseKey = args[i]
+		case strings.HasPrefix(arg, "--pairwise-key="):
+			parsed.pairwiseKey = strings.TrimPrefix(arg, "--pairwise-key=")
+		case arg == "--score-tolerance":
+			i++
+			if i >= len(args) {
+				return parsed, errors.New("--score-tolerance requires a value")
+			}
+			value, err := strconv.ParseFloat(args[i], 64)
+			if err != nil {
+				return parsed, fmt.Errorf("--score-tolerance: %w", err)
+			}
+			parsed.scoreTolerance = value
+		case strings.HasPrefix(arg, "--score-tolerance="):
+			value, err := strconv.ParseFloat(strings.TrimPrefix(arg, "--score-tolerance="), 64)
+			if err != nil {
+				return parsed, fmt.Errorf("--score-tolerance: %w", err)
+			}
+			parsed.scoreTolerance = value
+		case arg == "--format":
+			i++
+			if i >= len(args) {
+				return parsed, errors.New("--format requires a value")
+			}
+			parsed.format = args[i]
+		case strings.HasPrefix(arg, "--format="):
+			parsed.format = strings.TrimPrefix(arg, "--format=")
+		case strings.HasPrefix(arg, "-"):
+			return parsed, fmt.Errorf("unknown flag %q", arg)
+		default:
+			positionals = append(positionals, arg)
+		}
+	}
+	if parsed.format != "text" && parsed.format != "json" {
+		return parsed, errors.New("--format must be text or json")
+	}
+	if len(positionals) != 1 {
+		return parsed, errors.New("usage: goeval calibrate <results.jsonl>")
 	}
 	parsed.resultPath = positionals[0]
 	return parsed, nil

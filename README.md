@@ -4,9 +4,11 @@
 
 `go-eval` brings LLM-as-judge metrics to the Go ecosystem.
 Core metrics (Faithfulness, Hallucination, AnswerRelevancy, ContextPrecision,
-GEval, Compound), deterministic trajectory checks, and repeatability helpers run
-inside standard `go test`, with structured artifacts, benchmarks, `-parallel`,
-subtests, and CI integration working out of the box.
+ContextRecall, AnswerCorrectness, NoiseSensitivity, GEval, Compound), agent
+trajectory checks, structured traces, and repeatability helpers run inside
+standard `go test`, with structured artifacts, benchmarks, `-parallel`,
+subtests, reports, calibration summaries, and CI integration working out of the
+box.
 
 ## Why
 
@@ -156,6 +158,46 @@ GOEVAL=1 GOEVAL_TRACE=1 go test -v -run TestFaithfulness
 > **Warning:** traces contain full prompt + response text. May include PII
 > or sensitive eval payloads. Do not enable in shared CI logs.
 
+### Structured traces
+
+Use `Case.Trace` when your agent can emit structured spans, tool calls,
+artifacts, or state deltas. `Case.TraceID`, `Result.TraceID`, and JSONL
+`trace_id` fields let metric rows, scenario summaries, and trace records join
+cleanly in downstream reports.
+
+When both `Case.TraceID` and `Case.Trace.ID` are set, the trace's own ID is
+authoritative. `Case.TraceID` seeds an empty `Case.Trace.ID`, and a shared
+`Runner` writes each non-empty trace ID to its trace sink at most once.
+
+```go
+r := eval.NewRunner(
+	judge,
+	eval.WithResultSink(eval.DefaultResultSink()),
+	eval.WithTraceSink(eval.DefaultTraceSink()),
+)
+
+c := eval.Case{
+	Input:   "Find a route and charge the card",
+	Output:  answer,
+	TraceID: "route-42",
+	Trace: &eval.Trace{
+		ID:   "route-42",
+		Name: "checkout_route",
+		Spans: []eval.Span{{
+			Name: "charge",
+			Kind: "tool_call",
+			ToolCall: &eval.ToolCall{
+				Name:      "payments.charge",
+				Arguments: json.RawMessage(`{"amount":42}`),
+			},
+		}},
+	},
+}
+```
+
+When `GOEVAL_RESULTS_DIR` is set, `DefaultTraceSink` writes `traces.jsonl` in
+that directory. Trace writes use the same `WithRedactors` hooks as result JSONL.
+
 ## Metrics
 
 | Metric             | Measures                                               | Default threshold |
@@ -164,6 +206,13 @@ GOEVAL=1 GOEVAL_TRACE=1 go test -v -run TestFaithfulness
 | `Hallucination`    | Output does not invent facts outside Context           | 0.9               |
 | `AnswerRelevancy`  | Output addresses Input                                 | 0.7               |
 | `ContextPrecision` | Retrieved docs are relevant to Input                   | 0.7               |
+| `ContextRecall`    | Retrieved docs contain expected answer/facts           | 0.7               |
+| `AnswerCorrectness` | Output matches Expected semantically                  | 0.7               |
+| `NoiseSensitivity` | Output ignores distracting retrieved context           | 0.7               |
+| `TaskCompletion`   | Agent completed the user task                          | 0.8               |
+| `PlanAdherence`    | Agent followed the expected plan                       | 0.7               |
+| `ToolArgumentAccuracy` | Tool names and JSON arguments match expectations   | 1.0               |
+| `StepEfficiency`   | Trace stays within step and tool-call budgets          | 1.0               |
 | `GEval`            | Custom rubric with Criteria and optional Steps         | 0.7               |
 | `Compound`         | Multiple rubric dimensions in one judge call           | per-dimension     |
 | `Contains`         | Output contains expected substring                      | binary            |
@@ -390,6 +439,49 @@ Set `Step.ExpectFail` for negative cases where a contract or check should fail,
 for example an off-topic redirect that must not satisfy a boundary-respect
 contract.
 
+Portable scenario definitions can live in JSON while drivers stay app-owned:
+
+```json
+{
+  "scenarios": [
+    {
+      "name": "planning_to_route_ready",
+      "tier": "critical",
+      "driver": "route_agent",
+      "tools": ["plan_route", "select_map_items"],
+      "repeat": {"n": 2, "pass_rate": 1},
+      "steps": [
+        {
+          "name": "ready_route_request",
+          "input": "Propón la ruta",
+          "required_tool_patterns": ["plan_*"],
+          "required_artifacts": ["route"],
+          "max_tool_calls": 3
+        }
+      ]
+    }
+  ]
+}
+```
+
+Bind the named driver in Go before running:
+
+```go
+scenarios, err := eval.LoadScenarios("testdata/scenarios.json")
+if err != nil {
+	t.Fatal(err)
+}
+scenarios, err = eval.BindScenarioDrivers(scenarios, map[string]eval.StepFunc{
+	"route_agent": runRouteAgentStep,
+})
+if err != nil {
+	t.Fatal(err)
+}
+for _, s := range scenarios {
+	r.RunScenario(t, s)
+}
+```
+
 ## vs Python-first eval tools
 
 | Feature                     | Python-first tools   | `go-eval`                    |
@@ -400,9 +492,10 @@ contract.
 | External platform required  | no                  | no                           |
 | Dependencies in core        | pydantic, pytest    | stdlib only                  |
 | Structured state artifacts  | yes                 | yes                          |
-| Agent / conversation evals  | yes                 | typed turns + tool calls     |
+| Agent / conversation evals  | yes                 | typed turns + traces         |
 | Dataset loaders             | YAML/JSON           | JSON in core, YAML deferred  |
-| HTML / JSON reports         | yes                 | JSONL compare + summarize    |
+| HTML / JSON reports         | yes                 | static HTML/Markdown/JSON    |
+| Judge calibration           | yes                 | JSONL disagreement reports   |
 
 `go-eval` is intentionally smaller. It scores RAG-style answers, checks
 structured workflow artifacts and tool trajectories, compares and summarizes
@@ -449,16 +542,21 @@ r := eval.NewRunner(
 
 Redactors apply to result reasons, Compound dimension reasons, and recursive
 string metadata values, including scenario summary metadata and diagnostic
-strings. They do not affect returned `Result` values, raw artifacts, or
+strings. When configured with `WithTraceSink`, redactors also apply to trace
+span text, tool-call strings, trace metadata, artifact records, and state
+deltas. They do not affect returned `Result` values, raw artifacts, or
 `GOEVAL_TRACE` logs.
 
 When `GOEVAL_RESULTS_DIR` is set, `DefaultResultSink` writes
 `results.jsonl` in that directory. Each row includes `timestamp`, `test_name`,
-`metric`, `score`, `passed`, `reason`, `tokens`, optional `prompt_tokens` and
-`completion_tokens`, `latency_ns`, optional `dimensions`, and optional
+`metric`, optional `trace_id`, `score`, `passed`, `reason`, `tokens`, optional
+`prompt_tokens` and `completion_tokens`, `latency_ns`, optional `dimensions`, and optional
 `metadata`. Scenario runs also write one `_scenario_summary` row with per-step
 tool-call names, emitted artifact keys, failed metric names, repeat counts, and
-redacted metadata. `goeval summarize` excludes summary rows from metric means.
+redacted metadata. Repeated scenarios store all emitted trace IDs under
+`scenario_summary.trace_ids`; their top-level `trace_id` is left empty because
+no single run trace represents the aggregate row. `goeval summarize` excludes
+summary rows from metric means.
 `Runner` copies `Case.Metadata` into the run result unless a metric sets
 `Result.Metadata` explicitly.
 
@@ -497,10 +595,18 @@ The CLI exposes the same comparison path for CI:
 ```bash
 goeval compare old/results.jsonl new/results.jsonl
 goeval summarize current/results.jsonl
+goeval report current/results.jsonl --out report.html
+goeval report --baseline old/results.jsonl --current new/results.jsonl --format markdown
+goeval calibrate --case-id-key case_id --judge-key judge current/results.jsonl
 ```
 
 `goeval compare` exits nonzero when rows regress or disappear.
 `goeval summarize` prints pass/fail and score aggregates for one result file.
+`goeval report` renders static HTML, Markdown, or JSON. When `--format` is
+omitted, `--out` must use `.html`, `.htm`, `.md`, `.markdown`, or `.json`.
+`goeval calibrate` expects repeated rows with judge names in metadata, reports
+judge disagreement, aggregates duplicate judge/variant rows by mean score, and
+can compare A/B variants with `--pairwise-key variant`.
 
 ## Eval profiles and prerequisites
 

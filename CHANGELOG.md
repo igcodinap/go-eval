@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Structured agent trace model with `Trace`, `Span`, `ArtifactRecord`,
+  `StateDelta`, `TraceSink`, `WithTraceSink`, and `DefaultTraceSink`
+- Trace linkage through `Case.TraceID`, `Case.Trace`, `Result.TraceID`, and
+  JSONL `trace_id` result fields
+- Agent metrics: `TaskCompletion`, `ToolArgumentAccuracy`, `PlanAdherence`,
+  and `StepEfficiency`
+- RAG metrics: `ContextRecall`, `AnswerCorrectness`, and `NoiseSensitivity`
+- JSON scenario definitions via `LoadScenarios`, `DecodeScenarios`, and
+  `BindScenarioDrivers`
+- Static reports through `compare.ReportHTML`, `compare.ReportMarkdown`,
+  `compare.ReportJSON`, and `goeval report`
+- Judge calibration and pairwise summaries through `compare.Calibrate`,
+  `compare.CalibrateFile`, and `goeval calibrate`
+
+### Changed
+
+- Scenario steps can declare required and forbidden artifact keys directly
+- Result and trace redaction now share the same `WithRedactors` hooks
+- `Case.TraceID` now seeds empty structured trace IDs, and trace sinks write a
+  shared trace ID once per `Runner`
+- Repeated scenario summary rows now keep all run trace IDs under
+  `scenario_summary.trace_ids`
+- Judge calibration now aggregates duplicate judge or variant rows instead of
+  replacing earlier rows
+- `goeval report --out` now rejects unknown file extensions unless `--format`
+  is supplied explicitly
+
 ## [v0.9.0] - 2026-06-09
 
 ### Added

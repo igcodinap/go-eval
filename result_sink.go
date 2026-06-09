@@ -21,6 +21,7 @@ type RunResult struct {
 	TestName         string            `json:"test_name"`
 	Metric           string            `json:"metric"`
 	ScenarioName     string            `json:"scenario_name,omitempty"`
+	TraceID          string            `json:"trace_id,omitempty"`
 	Score            float64           `json:"score"`
 	Passed           bool              `json:"passed"`
 	Reason           string            `json:"reason"`
@@ -39,6 +40,7 @@ type ScenarioSummary struct {
 	Passed       bool              `json:"passed"`
 	RunCount     int               `json:"run_count"`
 	PassRuns     int               `json:"pass_runs"`
+	TraceIDs     []string          `json:"trace_ids,omitempty"`
 	Steps        []StepSummary     `json:"steps,omitempty"`
 	Metadata     map[string]any    `json:"metadata,omitempty"`
 	ArtifactKeys []string          `json:"artifact_keys,omitempty"`
@@ -118,6 +120,7 @@ func newRunResult(tbName string, result Result) RunResult {
 		Timestamp:        time.Now().UTC().Format(time.RFC3339Nano),
 		TestName:         tbName,
 		Metric:           result.Metric,
+		TraceID:          result.TraceID,
 		Score:            result.Score,
 		Passed:           result.Passed,
 		Reason:           result.Reason,

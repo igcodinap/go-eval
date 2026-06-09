@@ -491,6 +491,12 @@ func TestRunScenario_RepeatAggregatesPassRateAndMetadata(t *testing.T) {
 	if results[3].Kind != runResultKindScenarioSummary || results[3].ScenarioSummary.PassRuns != 2 {
 		t.Fatalf("missing scenario summary: %+v", results[3])
 	}
+	if results[3].TraceID != "" {
+		t.Fatalf("repeated scenario summary should not point to one trace id: %+v", results[3])
+	}
+	if len(results[3].ScenarioSummary.TraceIDs) != 3 {
+		t.Fatalf("repeated scenario summary should keep all trace ids: %+v", results[3].ScenarioSummary.TraceIDs)
+	}
 }
 
 func TestRunScenario_RepeatFailsBelowPassRate(t *testing.T) {

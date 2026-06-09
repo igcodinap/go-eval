@@ -22,6 +22,8 @@ type Case struct {
 	Context           []string
 	Turns             []Turn
 	ExpectedToolCalls []ToolCall
+	TraceID           string
+	Trace             *Trace
 	Metadata          map[string]any
 	Artifacts         map[string]json.RawMessage
 	Timeout           time.Duration
