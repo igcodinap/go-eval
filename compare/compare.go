@@ -159,12 +159,33 @@ func DefaultIdentity(result eval.RunResult) Identity {
 	}
 }
 
-// CaseIDFromMetadata builds an IdentityFunc that keys rows by metadata case ID.
+// CaseIDFromMetadata builds an IdentityFunc that includes metadata case ID.
 //
 // An empty key uses the conventional "case_id" metadata key. Non-string values
-// are formatted with fmt.Sprint so JSONL-decoded numeric IDs remain usable. Rows
-// without the metadata key fall back to DefaultIdentity.
+// are formatted with fmt.Sprint so JSONL-decoded numeric IDs remain usable. This
+// helper preserves the test name in the identity for backward-compatible,
+// test-scoped matching.
 func CaseIDFromMetadata(key string) IdentityFunc {
+	if key == "" {
+		key = DefaultCaseIDMetadataKey
+	}
+	return func(result eval.RunResult) Identity {
+		caseName := ""
+		if value, ok := result.Metadata[key]; ok && value != nil {
+			caseName = fmt.Sprint(value)
+		}
+		return Identity{
+			TestName: result.TestName,
+			CaseName: caseName,
+			Metric:   result.Metric,
+		}
+	}
+}
+
+// StableCaseIDFromMetadata builds an IdentityFunc that keys rows by case ID and
+// metric when the metadata case ID is present. This keeps case identity stable
+// across test renames. Rows without the metadata key fall back to DefaultIdentity.
+func StableCaseIDFromMetadata(key string) IdentityFunc {
 	if key == "" {
 		key = DefaultCaseIDMetadataKey
 	}
@@ -314,7 +335,7 @@ func CompareWithOptions(baseline []eval.RunResult, current []eval.RunResult, opt
 func CompareWithPolicy(baseline []eval.RunResult, current []eval.RunResult, policy Policy) Report {
 	identify := DefaultIdentity
 	if policy.CaseIDKey != "" {
-		identify = CaseIDFromMetadata(policy.CaseIDKey)
+		identify = StableCaseIDFromMetadata(policy.CaseIDKey)
 	}
 
 	baselineByID := indexResults(baseline, identify)

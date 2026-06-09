@@ -48,9 +48,15 @@ type MetricSummary struct {
 
 // SummaryOptions configures reliability summary aggregation.
 type SummaryOptions struct {
-	Identity         IdentityFunc
+	Identity IdentityFunc
+
+	// FlakyScoreStdDev overrides the default and policy flaky-score threshold
+	// when positive.
 	FlakyScoreStdDev float64
-	Policy           *Policy
+
+	// Policy supplies stable case identity and flaky-score thresholds when direct
+	// options do not override them.
+	Policy *Policy
 }
 
 // FlakySummary identifies repeated rows with mixed pass/fail or score variance.
@@ -115,11 +121,12 @@ func SummarizeWithOptions(results []eval.RunResult, opts SummaryOptions) Results
 	identity := opts.Identity
 	if identity == nil {
 		if opts.Policy != nil && opts.Policy.CaseIDKey != "" {
-			identity = CaseIDFromMetadata(opts.Policy.CaseIDKey)
+			identity = StableCaseIDFromMetadata(opts.Policy.CaseIDKey)
 		} else {
 			identity = CaseIDFromMetadata("")
 		}
 	}
+	explicitFlakyThreshold := opts.FlakyScoreStdDev > 0
 	flakyThreshold := opts.FlakyScoreStdDev
 	if flakyThreshold <= 0 {
 		flakyThreshold = defaultFlakyScoreStdDev
@@ -160,7 +167,12 @@ func SummarizeWithOptions(results []eval.RunResult, opts SummaryOptions) Results
 		if dataset := metadataString(result.Metadata, "dataset"); dataset != "" {
 			addToAccumulator(datasetAccumulators, dataset, result)
 		}
-		addToIdentityAccumulator(caseAccumulators, identity(result), result, flakyThresholdForResult(result, flakyThreshold, opts.Policy))
+		addToIdentityAccumulator(
+			caseAccumulators,
+			identity(result),
+			result,
+			flakyThresholdForResult(result, flakyThreshold, explicitFlakyThreshold, opts.Policy),
+		)
 	}
 
 	if summary.Total > 0 {
@@ -303,8 +315,8 @@ func (a metricAccumulator) flakyThresholdOrDefault(defaultThreshold float64) flo
 	return defaultThreshold
 }
 
-func flakyThresholdForResult(result eval.RunResult, defaultThreshold float64, policy *Policy) float64 {
-	if policy == nil {
+func flakyThresholdForResult(result eval.RunResult, defaultThreshold float64, explicitDefault bool, policy *Policy) float64 {
+	if policy == nil || explicitDefault {
 		return defaultThreshold
 	}
 	threshold := defaultThreshold

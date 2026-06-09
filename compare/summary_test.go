@@ -80,7 +80,7 @@ func TestSummarizeWithOptionsReportsFlakyIdentities(t *testing.T) {
 	if flaky.Count != 2 || flaky.Passed != 1 || flaky.Failed != 1 || !flaky.MixedPass {
 		t.Fatalf("unexpected flaky summary: %+v", flaky)
 	}
-	if flaky.Identity.TestName != "" || flaky.Identity.CaseName != "a" || flaky.Identity.Metric != "Faithfulness" {
+	if flaky.Identity.TestName != "TestEval" || flaky.Identity.CaseName != "a" || flaky.Identity.Metric != "Faithfulness" {
 		t.Fatalf("unexpected flaky identity: %+v", flaky.Identity)
 	}
 }
@@ -115,6 +115,50 @@ func TestSummarizeWithPolicyUsesPolicyFlakyThreshold(t *testing.T) {
 	})
 	if len(sensitive.Flaky) != 1 || !sensitive.Flaky[0].ScoreFlaky {
 		t.Fatalf("metric policy threshold should mark score flake: %+v", sensitive.Flaky)
+	}
+}
+
+func TestSummarizeWithOptionsThresholdOverridesPolicyThreshold(t *testing.T) {
+	results := []eval.RunResult{
+		{TestName: "TestEval/old", Metric: "Faithfulness", Score: 0.9, Passed: true, Metadata: map[string]any{"case_id": "same"}},
+		{TestName: "TestEval/new", Metric: "Faithfulness", Score: 0.7, Passed: true, Metadata: map[string]any{"case_id": "same"}},
+	}
+	policy := Policy{
+		CaseIDKey: "case_id",
+		Metrics: map[string]MetricPolicy{
+			"Faithfulness": {FlakyScoreStdDev: floatPtr(0.05)},
+		},
+	}
+
+	summary := SummarizeWithOptions(results, SummaryOptions{
+		Policy:           &policy,
+		FlakyScoreStdDev: 0.2,
+	})
+
+	if len(summary.Flaky) != 0 {
+		t.Fatalf("explicit SummaryOptions threshold should suppress policy flake: %+v", summary.Flaky)
+	}
+	if summary.ByCase["same/Faithfulness"].Count != 2 {
+		t.Fatalf("policy case id should still drive identity: %+v", summary.ByCase)
+	}
+}
+
+func TestSummarizeWithPolicyUsesStrictestRepeatedRowThreshold(t *testing.T) {
+	results := []eval.RunResult{
+		{TestName: "TestEval", Metric: "Faithfulness", Score: 0.9, Passed: true, Metadata: map[string]any{"case_id": "same", "tier": "standard"}},
+		{TestName: "TestEval", Metric: "Faithfulness", Score: 0.8, Passed: true, Metadata: map[string]any{"case_id": "same", "tier": "critical"}},
+	}
+
+	summary := SummarizeWithPolicy(results, Policy{
+		CaseIDKey: "case_id",
+		Tiers: map[string]MetricPolicy{
+			"standard": {FlakyScoreStdDev: floatPtr(0.2)},
+			"critical": {FlakyScoreStdDev: floatPtr(0.01)},
+		},
+	})
+
+	if len(summary.Flaky) != 1 || !summary.Flaky[0].ScoreFlaky {
+		t.Fatalf("strictest repeated-row threshold should mark score flake: %+v", summary.Flaky)
 	}
 }
 

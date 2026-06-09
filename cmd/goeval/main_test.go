@@ -415,7 +415,7 @@ func TestRunSummarizeReportsReliabilityGroupsAndFlakes(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	code := run(context.Background(), []string{"summarize", path}, nil, nil, &stdout, &stderr, nil)
+	code := run(context.Background(), []string{"summarize", "--case-id-key", "case_id", path}, nil, nil, &stdout, &stderr, nil)
 
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0; stderr=%q", code, stderr.String())
@@ -458,6 +458,56 @@ func TestRunSummarizeUsesPolicyFlakyThreshold(t *testing.T) {
 	}
 	if strings.Contains(out, "flaky") {
 		t.Fatalf("policy threshold should suppress score-only flake:\n%s", out)
+	}
+}
+
+func TestRunSummarizeUsesCaseIDKeyFlag(t *testing.T) {
+	path := writeResultFile(t,
+		`{"test_name":"TestEval/old","metric":"Faithfulness","score":0.9,"passed":true,"metadata":{"case_id":"a"}}`+"\n"+
+			`{"test_name":"TestEval/new","metric":"Faithfulness","score":0.8,"passed":true,"metadata":{"case_id":"a"}}`+"\n",
+	)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(context.Background(), []string{"summarize", "--case-id-key", "case_id", path}, nil, nil, &stdout, &stderr, nil)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr=%q", code, stderr.String())
+	}
+	out := stdout.String()
+	if !strings.Contains(out, "case=a/Faithfulness\tcount=2\tpassed=2\tfailed=0") {
+		t.Fatalf("stdout missing stable case-id summary:\n%s", out)
+	}
+	if strings.Contains(out, "case=TestEval/old") || strings.Contains(out, "case=TestEval/new") {
+		t.Fatalf("case-id flag should group renamed tests by case id:\n%s", out)
+	}
+}
+
+func TestRunSummarizeUsesConfigPolicy(t *testing.T) {
+	path := writeResultFile(t,
+		`{"test_name":"TestEval/old","metric":"Faithfulness","score":0.9,"passed":true,"metadata":{"case_id":"a"}}`+"\n"+
+			`{"test_name":"TestEval/new","metric":"Faithfulness","score":0.8,"passed":true,"metadata":{"case_id":"a"}}`+"\n",
+	)
+	configPath := writeConfigFile(t, `{
+		"compare": {
+			"case_id_key": "case_id",
+			"default": {"flaky_score_stddev": 0.2}
+		}
+	}`)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(context.Background(), []string{"summarize", "--config", configPath, path}, nil, nil, &stdout, &stderr, nil)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr=%q", code, stderr.String())
+	}
+	out := stdout.String()
+	if !strings.Contains(out, "case=a/Faithfulness\tcount=2\tpassed=2\tfailed=0") {
+		t.Fatalf("stdout missing config case-id summary:\n%s", out)
+	}
+	if strings.Contains(out, "flaky") {
+		t.Fatalf("config policy threshold should suppress score-only flake:\n%s", out)
 	}
 }
 

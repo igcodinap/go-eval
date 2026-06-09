@@ -473,19 +473,22 @@ if err != nil {
 
 Rows are matched by `test_name` and `metric` by default. Use
 `compare.Options.Identity` when a separate case id is stored in metadata. The
-`compare.CaseIDFromMetadata` helper matches rows that have the configured case
-id by case id and metric, so test renames do not appear as missing/added rows.
-Rows without that metadata key fall back to `test_name` and `metric`.
+`compare.CaseIDFromMetadata` helper adds the configured case id while keeping
+`test_name` in the identity for backward-compatible, test-scoped matching. Use
+`compare.StableCaseIDFromMetadata`, or a compare policy `case_id_key`, when case
+ids should match across test renames. Rows without that metadata key fall back
+to `test_name` and `metric`.
 Reports include added, missing, improved, regressed, and unchanged entries, with
 score, pass/fail, token, latency, and Compound dimension deltas.
 
-For the conventional `Case.Metadata["case_id"]` key, use the helper:
+For the conventional `Case.Metadata["case_id"]` key, use the stable helper when
+case IDs are unique across the suite:
 
 ```go
 report := compare.CompareWithOptions(
 	baseline,
 	current,
-	compare.Options{Identity: compare.CaseIDFromMetadata("")},
+	compare.Options{Identity: compare.StableCaseIDFromMetadata("")},
 )
 ```
 

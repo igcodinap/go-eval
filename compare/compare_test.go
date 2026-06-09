@@ -130,7 +130,7 @@ func TestCompareWithOptionsUsesCaseIdentity(t *testing.T) {
 		{TestName: "TestEval/new", Metric: "Faithfulness", Score: 0.6, Passed: true, Metadata: map[string]any{"case_id": "b"}},
 	}
 
-	report := CompareWithOptions(baseline, current, Options{Identity: CaseIDFromMetadata("")})
+	report := CompareWithOptions(baseline, current, Options{Identity: StableCaseIDFromMetadata("")})
 
 	if len(report.Entries) != 2 {
 		t.Fatalf("expected 2 entries, got %d", len(report.Entries))
@@ -155,8 +155,38 @@ func TestCaseIDFromMetadataUsesCustomKeyAndFormatsValues(t *testing.T) {
 		Metadata: map[string]any{"id": float64(42)},
 	})
 
-	if got.TestName != "" || got.CaseName != "42" || got.Metric != "ArtifactJSONPath" {
+	if got.TestName != "TestEval" || got.CaseName != "42" || got.Metric != "ArtifactJSONPath" {
 		t.Fatalf("unexpected identity: %+v", got)
+	}
+}
+
+func TestStableCaseIDFromMetadataUsesCaseOnlyAndFallsBack(t *testing.T) {
+	identity := StableCaseIDFromMetadata("id")
+
+	withCaseID := identity(eval.RunResult{
+		TestName: "TestEval",
+		Metric:   "ArtifactJSONPath",
+		Metadata: map[string]any{"id": "route-1"},
+	})
+	if withCaseID.TestName != "" || withCaseID.CaseName != "route-1" || withCaseID.Metric != "ArtifactJSONPath" {
+		t.Fatalf("unexpected stable identity: %+v", withCaseID)
+	}
+
+	missing := identity(eval.RunResult{
+		TestName: "TestEval",
+		Metric:   "ArtifactJSONPath",
+	})
+	if missing.TestName != "TestEval" || missing.CaseName != "" || missing.Metric != "ArtifactJSONPath" {
+		t.Fatalf("unexpected fallback identity: %+v", missing)
+	}
+
+	empty := identity(eval.RunResult{
+		TestName: "TestEval",
+		Metric:   "ArtifactJSONPath",
+		Metadata: map[string]any{"id": ""},
+	})
+	if empty != missing {
+		t.Fatalf("empty case id should fall back like missing case id: empty=%+v missing=%+v", empty, missing)
 	}
 }
 

@@ -18,11 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   flaky identity detection, and scenario run totals
 - Policy-aware summary APIs and `goeval summarize` policy flags for case ID
   identity and flaky-score thresholds
+- `compare.StableCaseIDFromMetadata` for case ID and metric matching across
+  test renames
 
 ### Changed
 
-- `compare.CaseIDFromMetadata` now keys rows with case IDs by case ID and metric,
-  falling back to test name and metric only when the metadata key is missing
 - `goeval summarize` text output now includes tier, flow, dataset, case, and
   flaky identity rows in addition to metric rows
 
