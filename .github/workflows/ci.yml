@@ -21,6 +21,12 @@ jobs:
           cache: true
       - name: Run tests
         run: go test -race -v ./...
+      - name: Run nested module tests
+        run: |
+          for module in adapters/openai adapters/ollama examples/rag_app examples/route_planner; do
+            (cd "$module" && go test -race -v ./...)
+          done
+          (cd examples/openai_judge && go test -race -tags=example -v ./...)
 
   lint:
     name: Lint

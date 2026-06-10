@@ -7,6 +7,9 @@
 
 set -e
 
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+
 echo "==> Running go test -race ./..."
 if ! go test -race ./...; then
   echo "FAIL: tests failed. Push aborted."
@@ -16,6 +19,20 @@ fi
 echo "==> Running golangci-lint run..."
 if ! golangci-lint run --timeout=5m; then
   echo "FAIL: lint errors found. Push aborted."
+  exit 1
+fi
+
+for module in adapters/openai adapters/ollama examples/rag_app examples/route_planner; do
+  echo "==> Running go test -race ./$module/..."
+  if ! (cd "$module" && go test -race ./...); then
+    echo "FAIL: tests failed in $module. Push aborted."
+    exit 1
+  fi
+done
+
+echo "==> Running go test -race -tags=example ./examples/openai_judge/..."
+if ! (cd examples/openai_judge && go test -race -tags=example ./...); then
+  echo "FAIL: tests failed in examples/openai_judge. Push aborted."
   exit 1
 fi
 

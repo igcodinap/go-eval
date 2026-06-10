@@ -17,7 +17,7 @@ import (
 	"github.com/igcodinap/go-eval/compare"
 )
 
-var version = "dev"
+var version = "v1.0.0"
 
 type goCommandFunc func(context.Context, []string, []string, io.Reader, io.Writer, io.Writer) int
 

@@ -45,16 +45,18 @@ Metrics: `Faithfulness`, `Hallucination`, `AnswerRelevancy`, `ContextPrecision`,
 
 ## CI / Hooks
 
-- `.github/workflows/ci.yml` — runs on PR + push to main: `go test -race` and `golangci-lint` (v2, action `@v9`).
-- `.githooks/pre-push` — runs tests + lint before every push. Configured via `core.hooksPath`.
+- `.github/workflows/ci.yml` — runs on PR + push to main: root and nested-module `go test -race`, plus `golangci-lint` (v2, action `@v9`).
+- `.githooks/pre-push` — runs root and nested-module tests + lint before every push. Configured via `core.hooksPath`.
 - `.golangci.yml` — v2 config. Enabled: `errcheck`, `govet`, `ineffassign`, `staticcheck`, `unused`, `nilerr`, `gofmt`, `goimports`.
 
 ## Releases / Changelog
 
 - `CHANGELOG.md` at repo root — Keep a Changelog format, semver.
-- Tag releases as `v<major>.<minor>.<patch>` (e.g. `v0.2.0`).
+- Tag root releases as `v<major>.<minor>.<patch>` (e.g. `v1.0.0`).
 - Before tagging: update `CHANGELOG.md` with the new version, date, and grouped changes (Added, Changed, Fixed, Removed). Move entries from `## Unreleased` into the new version section.
-- Tag: `git tag -a v0.x.0 -m "v0.x.0"` then `git push origin v0.x.0`.
+- Tag: `git tag -a v1.0.0 -m "v1.0.0"` then `git push origin v1.0.0`.
+- Tag nested adapter module releases with subdirectory-prefixed tags such as
+  `adapters/openai/v1.0.0` and `adapters/ollama/v1.0.0`.
 
 ## Issue workflow
 

@@ -300,7 +300,7 @@ r.Run(t, eval.ArtifactArrayContains{
 }, c)
 ```
 
-`examples/route_planner/` shows the intended v0.4 pattern: catch incoherent
+`examples/route_planner/` shows the intended deterministic-first pattern: catch incoherent
 workflow state first, then judge final prose only if it is still useful.
 
 Budget wrappers can fail an otherwise passing metric when token or latency
@@ -763,36 +763,29 @@ See `examples/openai_judge/` for a reference implementation.
 
 ## Status
 
-v0.8 adds scenario repeat, built-in tier filtering, per-case/per-step
-timeouts, scenario state passing, grouped contracts, pattern tool assertions,
-richer artifact/output checks, normalizers, and scenario summary JSONL rows.
-v0.7 added Agent Scenario Contracts, scenario-scoped tool registries, required
-tool checks, artifact array length checks, and result redaction before JSONL
-writes. API may change before v1.0.
+v1.0 is the first stable release of the `go test`-native evaluation core. The
+root package remains stdlib-only and keeps the core contracts small: `Judge`,
+`Metric`, `Case`, `Result`, `Runner`, structured traces, scenario drivers,
+JSONL sinks, deterministic tool/artifact checks, RAG/agent metrics, compare
+policies, reliability summaries, reports, and judge calibration.
+
+Future minor releases may add fields to exported structs and new optional
+helpers, but v1.x will avoid breaking the public interfaces and CLI workflows
+introduced by v1.0.
 
 ## Roadmap
 
-The agent-eval direction is staged. The core thesis is to stay Go-native,
-`go test` native, and local-first: deterministic state checks first,
-LLM-as-judge second, optional trace/platform integrations last.
+The v1.x direction is to keep the core Go-native, local-first, and dependency
+free while expanding optional integrations around it.
 
-The staged plan from AI-team review:
+Likely post-v1.0 work:
 
-1. v0.5: add conversation/trajectory primitives without forking the metric
-   pipeline: `Turn`, `ToolCall`, `Case.Turns`, `Case.ExpectedToolCalls`, and
-   dataset support.
-2. v0.6: add trajectory match modes (`strict`, `unordered`, `subset`,
-   `superset`), `ToolCallAccuracy`, `ToolCallF1`, `ForbiddenTool`, `StepBudget`,
-   repeat/flakiness helpers, and stronger JSONL reporting.
-3. v0.7: add `Scenario` / `Step` contracts, `Runner.RunScenario`, scenario
-   tool registries, expected-failure steps, deeper artifact checks, and sink
-   redaction before JSONL writes.
-4. v0.8: add scenario repeat, tier filtering, per-step timeouts, scenario
-   state, grouped contracts, pattern tool assertions, normalizers, wildcard
-   artifact paths, and scenario summary rows.
-5. Future: optional trace import/export, OTel/platform bridges, YAML loader
-   submodule, and additional judge adapters beyond Ollama (`Genkit`,
-   `Anthropic`, `Gemini`), still outside the dependency-free core.
+1. Optional OpenTelemetry/platform trace bridges outside the root package.
+2. YAML or richer dataset loaders in subpackages so the core stays stdlib-only.
+3. Additional judge adapters such as Anthropic, Gemini, and Genkit.
+4. Release automation for stamped CLI binaries and adapter module tags.
+5. More static report views and calibration workflows without requiring a
+   hosted dashboard.
 
 ## License
 
