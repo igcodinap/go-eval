@@ -1,0 +1,43 @@
+adapters/ollama/go.mod
+  s_7d84120b8b2ae1::t_e1c5d65a33890f 5
+README.md
+  s_7d84120b8b2ae1::t_a632863b8c99e5 303
+  s_7d84120b8b2ae1::t_e7d865a2be019a 766-774,778-788
+.gitignore
+  s_7d84120b8b2ae1::t_b1fc9a210433c3 20
+examples/rag_app/go.mod
+  s_7d84120b8b2ae1::t_31f51d7a120985 5
+CHANGELOG.md
+  s_7d84120b8b2ae1::t_04a9a980331679 10-11
+cmd/goeval/main.go
+  s_7d84120b8b2ae1::t_aef99480980608 20
+examples/openai_judge/go.mod
+  s_7d84120b8b2ae1::t_f3018f5a0d1b83 6-7
+adapters/openai/go.mod
+  s_7d84120b8b2ae1::t_556b1a5f5c21ea 6
+.github/workflows/ci.yml
+  s_7d84120b8b2ae1::t_a632863b8c99e5 24-29
+examples/route_planner/go.mod
+  s_7d84120b8b2ae1::t_7e95c08655acb1 5
+AGENTS.md
+  s_7d84120b8b2ae1::t_a632863b8c99e5 48-49,55,57-59
+.githooks/pre-push
+  s_7d84120b8b2ae1::t_10e77097ea22a1 10-12
+  s_7d84120b8b2ae1::t_a632863b8c99e5 25-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "4e97e96e9fabcf781f9de0db335fe2e4c9266f22",
+  "prompts": {},
+  "sessions": {
+    "s_7d84120b8b2ae1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eaa10-0175-7122-905b-fd580e386a16",
+        "model": "gpt-5.5"
+      },
+      "human_author": "igcodinap <igcodinap@users.noreply.github.com>"
+    }
+  }
+}
