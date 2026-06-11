@@ -28,7 +28,6 @@ type Runner struct {
 	caseFilter func(Case) bool
 	tierFilter []string
 	traceSeen  map[string]struct{}
-	sinkMu     sync.Mutex
 	traceMu    sync.Mutex
 }
 
@@ -151,9 +150,7 @@ func (r *Runner) writeRunResult(tb testing.TB, runResult RunResult) {
 
 	runResult = r.redactRunResult(runResult)
 
-	r.sinkMu.Lock()
 	err := r.sink.Write(runResult)
-	r.sinkMu.Unlock()
 	if err != nil {
 		tb.Errorf("result sink: %v", err)
 	}

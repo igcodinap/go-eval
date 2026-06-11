@@ -586,12 +586,21 @@ func jsonArraySubsetMatches(actual []any, expected []any, normalizer Normalizer,
 	}
 
 	used := make([]bool, len(actual))
+	useMemo := len(actual) <= 64
+	failedStates := map[arraySubsetSearchState]struct{}{}
 	failureIndex := -1
 	failureReason := ""
-	var search func(int) bool
-	search = func(expectedIndex int) bool {
+	var search func(int, uint64) bool
+	search = func(expectedIndex int, usedMask uint64) bool {
 		if expectedIndex == len(expected) {
 			return true
+		}
+		var state arraySubsetSearchState
+		if useMemo {
+			state = arraySubsetSearchState{expectedIndex: expectedIndex, usedMask: usedMask}
+			if _, failed := failedStates[state]; failed {
+				return false
+			}
 		}
 		localReason := ""
 		for actualIndex, actualValue := range actual {
@@ -606,7 +615,11 @@ func jsonArraySubsetMatches(actual []any, expected []any, normalizer Normalizer,
 				continue
 			}
 			used[actualIndex] = true
-			if search(expectedIndex + 1) {
+			nextMask := usedMask
+			if useMemo {
+				nextMask |= uint64(1) << uint(actualIndex)
+			}
+			if search(expectedIndex+1, nextMask) {
 				return true
 			}
 			used[actualIndex] = false
@@ -618,12 +631,20 @@ func jsonArraySubsetMatches(actual []any, expected []any, normalizer Normalizer,
 			}
 			failureReason = localReason
 		}
+		if useMemo {
+			failedStates[state] = struct{}{}
+		}
 		return false
 	}
-	if search(0) {
+	if search(0, 0) {
 		return true, ""
 	}
 	return false, fmt.Sprintf("%s expected element [%d] not found: %s", pathOrRoot(path), failureIndex, failureReason)
+}
+
+type arraySubsetSearchState struct {
+	expectedIndex int
+	usedMask      uint64
 }
 
 func joinJSONPath(path string, key string) string {

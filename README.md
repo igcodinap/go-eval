@@ -433,7 +433,9 @@ Driver errors and metric execution errors are fatal.
 
 Use `Scenario.State`, `StepRequest.State`, and `StepResult.State` for
 driver-to-driver runtime state. This state is copied between steps and stays out
-of JSONL unless you also place it in metadata. Use `Step.Timeout` or
+of JSONL unless you also place it in metadata. JSON-like maps and slices are
+cloned; custom reference values are treated as opaque and copied by reference, so
+keep them immutable or app-owned. Use `Step.Timeout` or
 `Case.Timeout` when individual checks need tighter limits than the runner
 default.
 
@@ -560,7 +562,9 @@ redacted metadata. Repeated scenarios store all emitted trace IDs under
 no single run trace represents the aggregate row. `goeval summarize` excludes
 summary rows from metric means.
 `Runner` copies `Case.Metadata` into the run result unless a metric sets
-`Result.Metadata` explicitly.
+`Result.Metadata` explicitly. Metadata cloning follows the same rule as scenario
+state: JSON-like map and slice values are cloned, while custom reference values
+are copied by reference.
 
 Compare a baseline and current result file with the `compare` package:
 

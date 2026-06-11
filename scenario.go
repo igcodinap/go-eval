@@ -19,6 +19,10 @@ type ScenarioRepeat struct {
 }
 
 // Scenario describes a sequential multi-step agent evaluation.
+//
+// State carries driver runtime state between steps. The runner clones JSON-like
+// map and slice values, but custom reference values are treated as opaque and
+// copied by reference; keep those values immutable or app-owned.
 type Scenario struct {
 	Name       string
 	Tier       string

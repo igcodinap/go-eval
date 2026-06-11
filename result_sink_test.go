@@ -8,7 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 type recordingSink struct {
@@ -45,6 +47,37 @@ func (s *recordingSink) all() []RunResult {
 	return append([]RunResult(nil), s.results...)
 }
 
+type concurrencyObservingSink struct {
+	entered  chan struct{}
+	release  chan struct{}
+	writes   atomic.Int64
+	inFlight atomic.Int64
+	max      atomic.Int64
+}
+
+func (s *concurrencyObservingSink) Write(RunResult) error {
+	current := s.inFlight.Add(1)
+	updateMaxInt64(&s.max, current)
+	if s.entered != nil {
+		s.entered <- struct{}{}
+	}
+	if s.release != nil {
+		<-s.release
+	}
+	s.inFlight.Add(-1)
+	s.writes.Add(1)
+	return nil
+}
+
+func updateMaxInt64(target *atomic.Int64, value int64) {
+	for {
+		old := target.Load()
+		if value <= old || target.CompareAndSwap(old, value) {
+			return
+		}
+	}
+}
+
 func TestRunner_WritesToSinkWhenConfigured(t *testing.T) {
 	t.Setenv(EnvVar, "1")
 
@@ -57,6 +90,51 @@ func TestRunner_WritesToSinkWhenConfigured(t *testing.T) {
 
 	if sink.count() != 1 {
 		t.Fatalf("expected one sink write, got %d", sink.count())
+	}
+}
+
+func TestRunner_AllowsConcurrentSinkWrites(t *testing.T) {
+	const writes = 4
+
+	sink := &concurrencyObservingSink{
+		entered: make(chan struct{}, writes),
+		release: make(chan struct{}),
+	}
+	r := NewRunner(&MockJudge{}, WithResultSink(sink))
+	tb := &recordingTB{}
+
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := 0; i < writes; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			r.writeRunResult(tb, RunResult{TestName: "test", Metric: "X", Passed: true})
+		}()
+	}
+
+	close(start)
+	entered := 0
+	timeout := time.After(200 * time.Millisecond)
+	for entered < writes {
+		select {
+		case <-sink.entered:
+			entered++
+		case <-timeout:
+			close(sink.release)
+			wg.Wait()
+			t.Fatalf("only %d/%d sink writes entered concurrently", entered, writes)
+		}
+	}
+	close(sink.release)
+	wg.Wait()
+
+	if got := sink.writes.Load(); got != writes {
+		t.Fatalf("sink writes = %d, want %d", got, writes)
+	}
+	if got := sink.max.Load(); got < 2 {
+		t.Fatalf("max concurrent sink writes = %d, want at least 2", got)
 	}
 }
 

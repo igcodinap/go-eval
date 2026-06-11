@@ -3,6 +3,7 @@ package eval
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -559,6 +560,40 @@ func TestArtifactSubsetArrayMatcherBacktracks(t *testing.T) {
 	}
 }
 
+func TestArtifactSubsetArrayMatcherMemoizedBoundary(t *testing.T) {
+	c := Case{Artifacts: map[string]json.RawMessage{
+		"items": artifactObjectArray(64),
+	}}
+
+	result, err := (ArtifactSubset{
+		Key:      "items",
+		Expected: json.RawMessage(`[{"id":0},{"id":63}]`),
+	}).Score(context.Background(), nil, c)
+	if err != nil {
+		t.Fatalf("Score: %v", err)
+	}
+	if !result.Passed {
+		t.Fatalf("expected 64-element boundary match, got %+v", result)
+	}
+}
+
+func TestArtifactSubsetArrayMatcherFallbackPastMemoizedBoundary(t *testing.T) {
+	c := Case{Artifacts: map[string]json.RawMessage{
+		"items": artifactObjectArray(65),
+	}}
+
+	result, err := (ArtifactSubset{
+		Key:      "items",
+		Expected: json.RawMessage(`[{"id":64}]`),
+	}).Score(context.Background(), nil, c)
+	if err != nil {
+		t.Fatalf("Score: %v", err)
+	}
+	if !result.Passed {
+		t.Fatalf("expected >64-element fallback match, got %+v", result)
+	}
+}
+
 func TestArtifactSubsetReportsMismatch(t *testing.T) {
 	c := Case{Artifacts: map[string]json.RawMessage{
 		"route": json.RawMessage(`{"success":true}`),
@@ -574,4 +609,17 @@ func TestArtifactSubsetReportsMismatch(t *testing.T) {
 	if result.Passed || !strings.Contains(result.Reason, "routeStatus is missing") {
 		t.Fatalf("expected subset mismatch, got %+v", result)
 	}
+}
+
+func artifactObjectArray(n int) json.RawMessage {
+	var b strings.Builder
+	b.WriteByte('[')
+	for i := 0; i < n; i++ {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		fmt.Fprintf(&b, `{"id":%d,"type":"x"}`, i)
+	}
+	b.WriteByte(']')
+	return json.RawMessage(b.String())
 }

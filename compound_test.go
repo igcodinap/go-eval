@@ -3,6 +3,7 @@ package eval
 import (
 	"context"
 	"math"
+	"strings"
 	"testing"
 )
 
@@ -217,6 +218,12 @@ func TestCompound_RetryOnceOnParseFailure(t *testing.T) {
 	}
 	if len(j.prompts) != 2 {
 		t.Fatalf("expected 2 prompts, got %d", len(j.prompts))
+	}
+	if strings.Contains(j.prompts[0], "JSON only, no prose.") {
+		t.Fatalf("first prompt should not include retry suffix")
+	}
+	if !strings.Contains(j.prompts[1], "JSON only, no prose.") {
+		t.Fatalf("second prompt missing retry suffix: %q", j.prompts[1])
 	}
 	if r.Tokens != 20 || r.PromptTokens != 6 || r.CompletionTokens != 14 {
 		t.Fatalf("unexpected token aggregation: %+v", r)
