@@ -80,9 +80,15 @@ func DefaultResultSink() ResultSink {
 	if dir == "" {
 		return nil
 	}
-	return &jsonlFileSink{
-		path: filepath.Join(dir, "results.jsonl"),
+	return NewJSONLResultSink(filepath.Join(dir, "results.jsonl"))
+}
+
+// NewJSONLResultSink returns a JSONL sink for RunResult rows.
+func NewJSONLResultSink(path string) ResultSink {
+	if path == "" {
+		return nil
 	}
+	return &jsonlFileSink{path: path}
 }
 
 type jsonlFileSink struct {
@@ -131,4 +137,9 @@ func newRunResult(tbName string, result Result) RunResult {
 		Dimensions:       result.Dimensions,
 		Metadata:         result.Metadata,
 	}
+}
+
+// NewRunResult returns the serialized form of a metric result for a test name.
+func NewRunResult(testName string, result Result) RunResult {
+	return newRunResult(testName, result)
 }

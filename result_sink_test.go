@@ -207,6 +207,86 @@ func TestDefaultResultSink_WritesJSONL(t *testing.T) {
 	}
 }
 
+func TestJSONLResultSinkCurrentRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "results.jsonl")
+	sink := NewJSONLResultSink(path)
+	if sink == nil {
+		t.Fatalf("expected non-nil sink")
+	}
+
+	result := RunResult{
+		Timestamp:        "2026-07-05T12:00:00Z",
+		TestName:         "TestRAG/france",
+		Metric:           "Rubric",
+		ScenarioName:     "rag_answer",
+		TraceID:          "trace-1",
+		Score:            0.92,
+		Passed:           true,
+		Reason:           "grounded answer",
+		Tokens:           42,
+		PromptTokens:     30,
+		CompletionTokens: 12,
+		LatencyNS:        int64(150 * time.Millisecond),
+		Dimensions: []DimensionResult{
+			{Name: "faithfulness", Score: 0.9, Threshold: 0.8, Passed: true, Reason: "supported"},
+		},
+		Metadata: map[string]any{
+			"case_id": "rag/france",
+			"tier":    "critical",
+		},
+	}
+	summary := RunResult{
+		Timestamp:    "2026-07-05T12:00:01Z",
+		Kind:         runResultKindScenarioSummary,
+		TestName:     "TestScenario/summary",
+		Metric:       "Scenario",
+		ScenarioName: "rag_answer",
+		Score:        1,
+		Passed:       true,
+		ScenarioSummary: &ScenarioSummary{
+			Name:     "rag_answer",
+			Passed:   true,
+			RunCount: 1,
+			PassRuns: 1,
+			TraceIDs: []string{"trace-1"},
+			Steps: []StepSummary{{
+				Name:         "answer",
+				Passed:       true,
+				ToolCalls:    []string{"retrieve"},
+				ArtifactKeys: []string{"retrieval"},
+				Metadata:     map[string]any{"tier": "critical"},
+			}},
+			Metadata:     map[string]any{"suite": "rag"},
+			ArtifactKeys: []string{"retrieval"},
+			Dimensions:   []DimensionResult{{Name: "scenario_pass_rate", Score: 1, Threshold: 1, Passed: true}},
+		},
+	}
+	if err := sink.Write(result); err != nil {
+		t.Fatalf("Write result: %v", err)
+	}
+	if err := sink.Write(summary); err != nil {
+		t.Fatalf("Write summary: %v", err)
+	}
+
+	rows := readRunResultsJSONL(t, path)
+	if len(rows) != 2 {
+		t.Fatalf("rows = %d, want 2", len(rows))
+	}
+	if rows[0].TraceID != "trace-1" ||
+		rows[0].PromptTokens != 30 ||
+		rows[0].CompletionTokens != 12 ||
+		len(rows[0].Dimensions) != 1 ||
+		rows[0].Metadata["tier"] != "critical" {
+		t.Fatalf("unexpected result row: %+v", rows[0])
+	}
+	if rows[1].Kind != runResultKindScenarioSummary ||
+		rows[1].ScenarioSummary == nil ||
+		rows[1].ScenarioSummary.TraceIDs[0] != "trace-1" ||
+		rows[1].ScenarioSummary.Steps[0].ToolCalls[0] != "retrieve" {
+		t.Fatalf("unexpected scenario summary row: %+v", rows[1])
+	}
+}
+
 func TestJSONLFileSink_ConcurrentWrites(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "results.jsonl")
@@ -499,4 +579,30 @@ func TestRunScenario_RedactsScenarioSummary(t *testing.T) {
 		step.ArtifactKeys[0] != "artifact-[REDACTED_UUID]" {
 		t.Fatalf("summary strings were not redacted: %+v", step)
 	}
+}
+
+func readRunResultsJSONL(t *testing.T, path string) []RunResult {
+	t.Helper()
+
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() {
+		_ = f.Close()
+	}()
+
+	var rows []RunResult
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		var row RunResult
+		if err := json.Unmarshal(scanner.Bytes(), &row); err != nil {
+			t.Fatalf("Unmarshal row: %v", err)
+		}
+		rows = append(rows, row)
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	return rows
 }

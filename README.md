@@ -200,6 +200,86 @@ c := eval.Case{
 When `GOEVAL_RESULTS_DIR` is set, `DefaultTraceSink` writes `traces.jsonl` in
 that directory. Trace writes use the same `WithRedactors` hooks as result JSONL.
 
+When `goeval test` runs with `GOEVAL_RESULTS_DIR` set, it also writes a
+`goeval-run.json` sidecar manifest with the go-eval version, schema versions,
+command, profile, paths, and timing metadata. Existing `results.jsonl` and
+`traces.jsonl` readers do not require the manifest.
+
+## Reliable Judge Execution
+
+`Judge` remains the small provider abstraction used by all metrics. For judges
+that can return raw model text, wrap a `RawJudge` with `NewJudgeExecutor` to add
+strict JSON parsing, retries, concurrency limits, parsed-response caching, and
+optional JSONL attempt diagnostics.
+
+```go
+raw := newMyRawJudge(t)
+judge := eval.NewJudgeExecutor(
+	raw,
+	eval.WithJudgeExecutorAttempts(2),
+	eval.WithJudgeExecutorConcurrency(4),
+	eval.WithJudgeCache(eval.NewInMemoryJudgeCache()),
+	eval.WithJudgeEventSink(eval.DefaultJudgeEventSink()),
+)
+
+r := eval.NewRunner(judge)
+```
+
+Parsed-response cache entries are isolated per executor by default, even when a
+cache instance is shared. Use `WithJudgeCacheNamespace` only when multiple
+executors intentionally share the same judge/parser/retry configuration.
+`DefaultJudgeEventSink` writes best-effort diagnostics; event sink errors do not
+fail otherwise valid evals.
+
+The default parser accepts judge responses shaped as:
+
+```json
+{"score": 0.82, "reason": "brief explanation"}
+```
+
+## Post-Hoc Evaluation
+
+Use `Evaluator` when you want the same `Metric` contract outside `testing.TB`,
+for example when replaying stored cases or traces:
+
+```go
+e := eval.NewEvaluator(judge, eval.WithEvaluatorResultSink(eval.NewJSONLResultSink("posthoc.jsonl")))
+result, err := e.EvaluateNamed(ctx, "case/france", eval.Rubric{
+	ID:        "answer-quality",
+	Version:   "v1",
+	Criteria:  "Answer directly and accurately.",
+	Threshold: 0.8,
+}, c)
+```
+
+Trace selectors map stored traces into `Case` values without introducing a
+query-language dependency:
+
+```go
+selector := eval.TraceCaseSelector{
+	Input:    eval.SpanInput("request"),
+	Output:   eval.SpanOutput("answer"),
+	Expected: eval.TraceMetadata("expected"),
+}
+
+traces, err := eval.ReadTraceJSONLFile("traces.jsonl")
+if err != nil {
+	return err
+}
+c, err := selector.CaseFromTrace(traces[0])
+```
+
+The CLI also supports deterministic post-hoc checks over JSON datasets and emits
+normal result JSONL:
+
+```bash
+goeval eval --metric contains --dataset testdata/cases.json --out posthoc.jsonl
+goeval summarize posthoc.jsonl
+```
+
+The CLI `jsonpath` metric uses the same limited dot-key and `[index]` syntax as
+`eval.JSONPath`, not the full JSONPath specification.
+
 ## Metrics
 
 | Metric             | Measures                                               | Default threshold |
@@ -216,10 +296,11 @@ that directory. Trace writes use the same `WithRedactors` hooks as result JSONL.
 | `ToolArgumentAccuracy` | Tool names and JSON arguments match expectations   | 1.0               |
 | `StepEfficiency`   | Trace stays within step and tool-call budgets          | 1.0               |
 | `GEval`            | Custom rubric with Criteria and optional Steps         | 0.7               |
+| `Rubric`           | Named/versioned custom GEval-style rubric              | 0.7               |
 | `Compound`         | Multiple rubric dimensions in one judge call           | per-dimension     |
 | `Contains`         | Output contains expected substring                      | binary            |
 | `Regex`            | Output matches a regex                                 | binary            |
-| `JSONPath`         | JSON output value at configured path equals expected   | binary            |
+| `JSONPath`         | JSON output value at limited dot path equals expected  | binary            |
 | `FieldCount`       | Minimum non-null top-level JSON field count            | config            |
 | `ArtifactExists`   | Named structured artifact exists                       | binary            |
 | `ArtifactNotExists` | Named structured artifact does not exist              | binary            |

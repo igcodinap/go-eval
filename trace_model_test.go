@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 )
 
 type recordingTraceSink struct {
@@ -108,6 +109,79 @@ func TestDefaultTraceSinkWritesJSONL(t *testing.T) {
 	}
 	if got.ID != "trace-1" || got.Name != "smoke" {
 		t.Fatalf("unexpected trace: %+v", got)
+	}
+}
+
+func TestJSONLTraceSinkCurrentRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv(ResultsDirEnvVar, dir)
+
+	sink := DefaultTraceSink()
+	if sink == nil {
+		t.Fatalf("expected non-nil trace sink")
+	}
+	trace := Trace{
+		ID:           "trace-1",
+		Name:         "checkout",
+		TestName:     "TestScenario/checkout",
+		ScenarioName: "checkout",
+		StartedAt:    "2026-07-05T12:00:00Z",
+		EndedAt:      "2026-07-05T12:00:01Z",
+		DurationNS:   int64(time.Second),
+		Spans: []Span{{
+			ID:         "span-1",
+			ParentID:   "root",
+			Name:       "route.lookup",
+			Kind:       "tool_call",
+			StartedAt:  "2026-07-05T12:00:00Z",
+			EndedAt:    "2026-07-05T12:00:00.100Z",
+			DurationNS: int64(100 * time.Millisecond),
+			Input:      "from SFO to SCL",
+			Output:     "flight found",
+			ToolCall: &ToolCall{
+				ID:        "call-1",
+				Name:      "search_flights",
+				Arguments: json.RawMessage(`{"from":"SFO","to":"SCL"}`),
+				Result:    "flight-123",
+			},
+			Metadata: map[string]any{"provider": "mock"},
+		}},
+		Artifacts: []ArtifactRecord{{
+			Key:      "route",
+			Name:     "Route",
+			MIMEType: "application/json",
+			URI:      "memory://route",
+			Value:    json.RawMessage(`{"id":"route-1"}`),
+			Metadata: map[string]any{"tier": "critical"},
+		}},
+		StateDeltas: []StateDelta{{
+			Key:      "status",
+			Before:   json.RawMessage(`"pending"`),
+			After:    json.RawMessage(`"ready"`),
+			Metadata: map[string]any{"source": "planner"},
+		}},
+		Metadata: map[string]any{"case_id": "checkout/route"},
+	}
+	if err := sink.WriteTrace(trace); err != nil {
+		t.Fatalf("WriteTrace: %v", err)
+	}
+
+	traces, err := ReadTraceJSONLFile(filepath.Join(dir, "traces.jsonl"))
+	if err != nil {
+		t.Fatalf("ReadTraceJSONLFile: %v", err)
+	}
+	if len(traces) != 1 {
+		t.Fatalf("traces = %d, want 1", len(traces))
+	}
+	got := traces[0]
+	if got.ID != "trace-1" ||
+		got.ScenarioName != "checkout" ||
+		got.DurationNS != int64(time.Second) ||
+		got.Spans[0].ToolCall.Name != "search_flights" ||
+		string(got.Spans[0].ToolCall.Arguments) != `{"from":"SFO","to":"SCL"}` ||
+		string(got.Artifacts[0].Value) != `{"id":"route-1"}` ||
+		string(got.StateDeltas[0].After) != `"ready"` {
+		t.Fatalf("unexpected trace round trip: %+v", got)
 	}
 }
 

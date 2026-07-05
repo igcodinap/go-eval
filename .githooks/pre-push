@@ -10,6 +10,12 @@ set -e
 repo_root=$(git rev-parse --show-toplevel)
 cd "$repo_root"
 
+echo "==> Checking core package stdlib-only contract"
+if ! sh scripts/check-core-stdlib.sh; then
+  echo "FAIL: core package stdlib-only check failed. Push aborted."
+  exit 1
+fi
+
 echo "==> Running go test -race ./..."
 if ! go test -race ./...; then
   echo "FAIL: tests failed. Push aborted."

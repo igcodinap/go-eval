@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	eval "github.com/igcodinap/go-eval"
 	"github.com/igcodinap/go-eval/compare"
@@ -23,6 +24,7 @@ type goCommandFunc func(context.Context, []string, []string, io.Reader, io.Write
 
 const usage = `Usage:
   goeval test [--profile <name>] [--config <path>] [go test args...]
+  goeval eval --metric contains|regex|jsonpath|field-count --dataset <cases.json> [--out <results.jsonl>]
   goeval compare [--policy <path>] [--config <path>] [--case-id-key <key>] [--score-tolerance <float>] [--fail-on-regression=<bool>] [--format text|json] <baseline.jsonl> <current.jsonl>
   goeval summarize [--policy <path>] [--config <path>] [--case-id-key <key>] <results.jsonl>
   goeval report [--format html|markdown|json] [--out <path>] <results.jsonl>
@@ -32,6 +34,7 @@ const usage = `Usage:
 
 Commands:
   test       Run go test with GOEVAL=1 set.
+  eval       Run deterministic post-hoc evals over a dataset (jsonpath uses go-eval's limited dot-path syntax).
   compare    Compare two go-eval JSONL result files.
   summarize  Summarize one go-eval JSONL result file.
   report     Render a static report from result JSONL.
@@ -56,6 +59,8 @@ func run(ctx context.Context, args []string, baseEnv []string, stdin io.Reader, 
 		return 0
 	case "test":
 		return runTest(ctx, args[1:], baseEnv, stdin, stdout, stderr, goCmd)
+	case "eval":
+		return runEval(ctx, args[1:], stdout, stderr)
 	case "compare":
 		return runCompare(args[1:], stdout, stderr)
 	case "summarize":
@@ -97,7 +102,10 @@ func runTest(
 		}
 		goArgs := append([]string{"test"}, forwardedArgs...)
 		env := setEnv(baseEnv, eval.EnvVar, "1")
-		return goCmd(ctx, goArgs, env, stdin, stdout, stderr)
+		resultsDir := lookupEnvValue(env, eval.ResultsDirEnvVar)
+		return runGoTestWithManifest(ctx, goArgs, env, stdin, stdout, stderr, goCmd, runManifestRequest{
+			resultsDir: resultsDir,
+		})
 	}
 
 	manifest, _, err := loadManifest(configPath, true)
@@ -138,7 +146,55 @@ func runTest(
 	} else {
 		env = unsetEnv(env, eval.ResultsDirEnvVar)
 	}
-	return goCmd(ctx, testArgs, env, stdin, stdout, stderr)
+	return runGoTestWithManifest(ctx, testArgs, env, stdin, stdout, stderr, goCmd, runManifestRequest{
+		profile:    profileName,
+		packages:   append([]string(nil), profile.Packages...),
+		resultsDir: profile.ResultsDir,
+	})
+}
+
+type runManifestRequest struct {
+	profile    string
+	packages   []string
+	resultsDir string
+}
+
+func runGoTestWithManifest(
+	ctx context.Context,
+	goArgs []string,
+	env []string,
+	stdin io.Reader,
+	stdout io.Writer,
+	stderr io.Writer,
+	goCmd goCommandFunc,
+	req runManifestRequest,
+) int {
+	start := time.Now()
+	code := goCmd(ctx, goArgs, env, stdin, stdout, stderr)
+	if req.resultsDir == "" {
+		return code
+	}
+
+	end := time.Now()
+	manifest := eval.NewRunManifest()
+	manifest.GoEvalVersion = version
+	manifest.Command = append([]string{"go"}, goArgs...)
+	manifest.Profile = req.profile
+	manifest.Packages = append([]string(nil), req.packages...)
+	manifest.ResultsPath = filepath.Join(req.resultsDir, "results.jsonl")
+	manifest.TracesPath = filepath.Join(req.resultsDir, "traces.jsonl")
+	manifest.JudgeEventsPath = filepath.Join(req.resultsDir, "judge-events.jsonl")
+	manifest.StartedAt = start.UTC().Format(time.RFC3339Nano)
+	manifest.EndedAt = end.UTC().Format(time.RFC3339Nano)
+	manifest.DurationNS = int64(end.Sub(start))
+
+	if err := eval.WriteRunManifest(filepath.Join(req.resultsDir, eval.RunManifestFileName), manifest); err != nil {
+		writef(stderr, "test: write run manifest: %v\n", err)
+		if code == 0 {
+			return 1
+		}
+	}
+	return code
 }
 
 func runGoCommand(ctx context.Context, args []string, env []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
@@ -157,6 +213,105 @@ func runGoCommand(ctx context.Context, args []string, env []string, stdin io.Rea
 		return 1
 	}
 	return 0
+}
+
+func runEval(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer) int {
+	parsed, err := parseEvalArgs(args)
+	if err != nil {
+		writef(stderr, "eval: %v\n", err)
+		return 2
+	}
+
+	metric, err := evalMetric(parsed)
+	if err != nil {
+		writef(stderr, "eval: %v\n", err)
+		return 2
+	}
+
+	cases, err := eval.LoadNamedCases(parsed.datasetPath)
+	if err != nil {
+		writef(stderr, "eval: load dataset: %v\n", err)
+		return 1
+	}
+
+	out := stdout
+	var closeOut func() error
+	if parsed.outPath != "" {
+		if err := os.MkdirAll(filepath.Dir(parsed.outPath), 0o755); err != nil {
+			writef(stderr, "eval: create output dir: %v\n", err)
+			return 1
+		}
+		f, err := os.OpenFile(parsed.outPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+		if err != nil {
+			writef(stderr, "eval: open output: %v\n", err)
+			return 1
+		}
+		out = f
+		closeOut = f.Close
+	}
+
+	enc := json.NewEncoder(out)
+	evaluator := eval.NewEvaluator(nil)
+	failed := 0
+	for _, tc := range cases {
+		result, err := evaluator.EvaluateNamed(ctx, tc.Name, metric, tc.Case)
+		if err != nil {
+			if closeOut != nil {
+				_ = closeOut()
+			}
+			writef(stderr, "eval: %s: %v\n", tc.Name, err)
+			return 1
+		}
+		if !result.Passed {
+			failed++
+		}
+		if err := enc.Encode(eval.NewRunResult(tc.Name, result)); err != nil {
+			if closeOut != nil {
+				_ = closeOut()
+			}
+			writef(stderr, "eval: write result: %v\n", err)
+			return 1
+		}
+	}
+	if closeOut != nil {
+		if err := closeOut(); err != nil {
+			writef(stderr, "eval: close output: %v\n", err)
+			return 1
+		}
+		writef(stdout, "wrote %s\n", parsed.outPath)
+	}
+	if failed > 0 {
+		return 1
+	}
+	return 0
+}
+
+func evalMetric(parsed evalCommandArgs) (eval.Metric, error) {
+	switch parsed.metric {
+	case "contains":
+		return eval.Contains{}, nil
+	case "regex":
+		if parsed.pattern == "" {
+			return nil, errors.New("--pattern is required for --metric regex")
+		}
+		return eval.Regex{Pattern: parsed.pattern}, nil
+	case "jsonpath":
+		if parsed.path == "" {
+			return nil, errors.New("--path is required for --metric jsonpath")
+		}
+		metric, err := eval.NewJSONPath(parsed.path)
+		if err != nil {
+			return nil, err
+		}
+		return metric, nil
+	case "field-count":
+		if parsed.minFields <= 0 {
+			return nil, errors.New("--min-fields must be greater than zero for --metric field-count")
+		}
+		return eval.FieldCount{MinFields: parsed.minFields}, nil
+	default:
+		return nil, errors.New("--metric must be contains, regex, jsonpath, or field-count")
+	}
 }
 
 func runCompare(args []string, stdout io.Writer, stderr io.Writer) int {
@@ -590,6 +745,25 @@ func unsetEnv(env []string, key string) []string {
 	return next
 }
 
+func lookupEnvValue(env []string, key string) string {
+	prefix := key + "="
+	for i := len(env) - 1; i >= 0; i-- {
+		if strings.HasPrefix(env[i], prefix) {
+			return strings.TrimPrefix(env[i], prefix)
+		}
+	}
+	return ""
+}
+
+type evalCommandArgs struct {
+	datasetPath string
+	outPath     string
+	metric      string
+	pattern     string
+	path        string
+	minFields   int
+}
+
 type compareCommandArgs struct {
 	baselinePath     string
 	currentPath      string
@@ -653,6 +827,82 @@ func parseTestArgs(args []string) (string, string, []string, error) {
 		}
 	}
 	return profile, config, forwarded, nil
+}
+
+func parseEvalArgs(args []string) (evalCommandArgs, error) {
+	var parsed evalCommandArgs
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "--dataset":
+			i++
+			if i >= len(args) {
+				return parsed, errors.New("--dataset requires a value")
+			}
+			parsed.datasetPath = args[i]
+		case strings.HasPrefix(arg, "--dataset="):
+			parsed.datasetPath = strings.TrimPrefix(arg, "--dataset=")
+		case arg == "--out":
+			i++
+			if i >= len(args) {
+				return parsed, errors.New("--out requires a value")
+			}
+			parsed.outPath = args[i]
+		case strings.HasPrefix(arg, "--out="):
+			parsed.outPath = strings.TrimPrefix(arg, "--out=")
+		case arg == "--metric":
+			i++
+			if i >= len(args) {
+				return parsed, errors.New("--metric requires a value")
+			}
+			parsed.metric = args[i]
+		case strings.HasPrefix(arg, "--metric="):
+			parsed.metric = strings.TrimPrefix(arg, "--metric=")
+		case arg == "--pattern":
+			i++
+			if i >= len(args) {
+				return parsed, errors.New("--pattern requires a value")
+			}
+			parsed.pattern = args[i]
+		case strings.HasPrefix(arg, "--pattern="):
+			parsed.pattern = strings.TrimPrefix(arg, "--pattern=")
+		case arg == "--path":
+			i++
+			if i >= len(args) {
+				return parsed, errors.New("--path requires a value")
+			}
+			parsed.path = args[i]
+		case strings.HasPrefix(arg, "--path="):
+			parsed.path = strings.TrimPrefix(arg, "--path=")
+		case arg == "--min-fields":
+			i++
+			if i >= len(args) {
+				return parsed, errors.New("--min-fields requires a value")
+			}
+			value, err := strconv.Atoi(args[i])
+			if err != nil {
+				return parsed, fmt.Errorf("--min-fields: %w", err)
+			}
+			parsed.minFields = value
+		case strings.HasPrefix(arg, "--min-fields="):
+			value, err := strconv.Atoi(strings.TrimPrefix(arg, "--min-fields="))
+			if err != nil {
+				return parsed, fmt.Errorf("--min-fields: %w", err)
+			}
+			parsed.minFields = value
+		case strings.HasPrefix(arg, "-"):
+			return parsed, fmt.Errorf("unknown flag %q", arg)
+		default:
+			return parsed, fmt.Errorf("unexpected positional argument %q", arg)
+		}
+	}
+	if parsed.datasetPath == "" {
+		return parsed, errors.New("--dataset is required")
+	}
+	if parsed.metric == "" {
+		return parsed, errors.New("--metric is required")
+	}
+	return parsed, nil
 }
 
 func parseSummarizeArgs(args []string) (summarizeCommandArgs, error) {

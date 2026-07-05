@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [v1.1.0] - 2026-07-05
+
+### Added
+
+- Judge executor layer with `NewJudgeExecutor`, `JSONJudgeParser`, retry and
+  concurrency options, `JudgeCache`, `NewInMemoryJudgeCache`,
+  `WithJudgeCacheNamespace`, `WithJudgeRetryPolicy`, `JudgeEventSink`,
+  `NewJSONLJudgeEventSink`, and `DefaultJudgeEventSink`
+- Programmatic post-hoc evaluator with `NewEvaluator`, `Evaluate`,
+  `EvaluateNamed`, evaluator result/trace sinks, and evaluator redactors
+- Trace selector helpers with `TraceCaseSelector`, `TraceTextSelector`,
+  span/metadata/artifact/state selectors, `ReadTraceJSONL`, and
+  `ReadTraceJSONLFile`
+- Run manifest sidecar support with `RunManifest`, schema version constants,
+  `NewRunManifest`, `WriteRunManifest`, `ReadRunManifest`, and
+  `DefaultRunManifestPath`
+- `goeval test` now writes `goeval-run.json` when `GOEVAL_RESULTS_DIR` or a
+  profile `results_dir` is configured
+- Deterministic post-hoc CLI command:
+  `goeval eval --metric contains|regex|jsonpath|field-count --dataset <path>`
+- Versioned custom rubric metric with `Rubric`
+- Public JSONL helpers `NewJSONLResultSink` and `NewRunResult`
+- Release gate coverage for current `results.jsonl`, `traces.jsonl`, and
+  `goeval-run.json` artifact round trips
+- CI and pre-push check that the root package remains stdlib-only
+
+### Fixed
+
+- Judge executor event sinks now remain best-effort even if a diagnostic sink
+  panics
+
 ## [v1.0.0] - 2026-06-10
 
 ### Added

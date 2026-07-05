@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"net"
 	"os"
@@ -101,6 +102,84 @@ func TestRunTestProfileLoadsManifestAndForwardsEnv(t *testing.T) {
 	}
 	if got, _ := envValue(recorder.env, "GOEVAL_RESULTS_DIR"); got != resultsDir {
 		t.Fatalf("GOEVAL_RESULTS_DIR = %q, want %q", got, resultsDir)
+	}
+
+	manifestPath := filepath.Join(resultsDir, "goeval-run.json")
+	data, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("ReadFile manifest: %v", err)
+	}
+	var manifest struct {
+		SchemaVersion        int      `json:"schema_version"`
+		GoEvalVersion        string   `json:"goeval_version"`
+		ResultsSchemaVersion int      `json:"results_schema_version"`
+		TraceSchemaVersion   int      `json:"trace_schema_version"`
+		Command              []string `json:"command"`
+		Profile              string   `json:"profile"`
+		ResultsPath          string   `json:"results_path"`
+	}
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		t.Fatalf("Unmarshal manifest: %v", err)
+	}
+	if manifest.SchemaVersion != 1 || manifest.ResultsSchemaVersion != 1 || manifest.TraceSchemaVersion != 1 {
+		t.Fatalf("unexpected schema versions: %+v", manifest)
+	}
+	if manifest.GoEvalVersion == "" || manifest.Profile != "pr" || manifest.ResultsPath != filepath.Join(resultsDir, "results.jsonl") {
+		t.Fatalf("unexpected manifest: %+v", manifest)
+	}
+}
+
+func TestRunEvalContainsWritesJSONL(t *testing.T) {
+	dir := t.TempDir()
+	datasetPath := filepath.Join(dir, "cases.json")
+	if err := os.WriteFile(datasetPath, []byte(`{
+		"cases": [
+			{"name":"pass","output":"Paris is the capital of France","expected":"Paris","metadata":{"case_id":"fr"}}
+		]
+	}`), 0o644); err != nil {
+		t.Fatalf("WriteFile dataset: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := run(context.Background(), []string{"eval", "--metric", "contains", "--dataset", datasetPath}, nil, nil, &stdout, &stderr, nil)
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"test_name":"pass"`) ||
+		!strings.Contains(stdout.String(), `"metric":"Contains"`) ||
+		!strings.Contains(stdout.String(), `"passed":true`) {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
+func TestRunEvalContainsReturnsFailureOnFailedCase(t *testing.T) {
+	dir := t.TempDir()
+	datasetPath := filepath.Join(dir, "cases.json")
+	outPath := filepath.Join(dir, "results.jsonl")
+	if err := os.WriteFile(datasetPath, []byte(`{
+		"cases": [
+			{"name":"fail","output":"Lyon","expected":"Paris"}
+		]
+	}`), 0o644); err != nil {
+		t.Fatalf("WriteFile dataset: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := run(context.Background(), []string{"eval", "--metric", "contains", "--dataset", datasetPath, "--out", outPath}, nil, nil, &stdout, &stderr, nil)
+	if code != 1 {
+		t.Fatalf("exit code = %d, want 1; stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "wrote "+outPath) {
+		t.Fatalf("stdout = %q", stdout.String())
+	}
+	data, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("ReadFile results: %v", err)
+	}
+	if !strings.Contains(string(data), `"passed":false`) {
+		t.Fatalf("expected failed result JSONL, got %s", data)
 	}
 }
 
