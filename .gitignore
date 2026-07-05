@@ -17,6 +17,7 @@ coverage.txt
 # Local build and module caches used in this workspace
 .gocache/
 .gomodcache/
+.goeval/
 .next/
 
 # Example build artifacts

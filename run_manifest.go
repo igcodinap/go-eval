@@ -27,12 +27,22 @@ type RunManifest struct {
 	GoEvalVersion        string         `json:"goeval_version,omitempty"`
 	ResultsSchemaVersion int            `json:"results_schema_version"`
 	TraceSchemaVersion   int            `json:"trace_schema_version"`
+	RunID                string         `json:"run_id,omitempty"`
+	RunName              string         `json:"run_name,omitempty"`
+	Repo                 string         `json:"repo,omitempty"`
+	Branch               string         `json:"branch,omitempty"`
+	Commit               string         `json:"commit,omitempty"`
+	ExitCode             int            `json:"exit_code,omitempty"`
+	Status               string         `json:"status,omitempty"`
 	Command              []string       `json:"command,omitempty"`
 	Profile              string         `json:"profile,omitempty"`
 	Packages             []string       `json:"packages,omitempty"`
 	ResultsPath          string         `json:"results_path,omitempty"`
 	TracesPath           string         `json:"traces_path,omitempty"`
 	JudgeEventsPath      string         `json:"judge_events_path,omitempty"`
+	TestEventsPath       string         `json:"test_events_path,omitempty"`
+	SummaryPath          string         `json:"summary_path,omitempty"`
+	ReportPath           string         `json:"report_path,omitempty"`
 	StartedAt            string         `json:"started_at,omitempty"`
 	EndedAt              string         `json:"ended_at,omitempty"`
 	DurationNS           int64          `json:"duration_ns,omitempty"`
@@ -82,7 +92,7 @@ func WriteRunManifest(path string, manifest RunManifest) error {
 		return err
 	}
 	data = append(data, '\n')
-	return os.WriteFile(path, data, 0o644)
+	return writeFileAtomic(path, data, 0o644)
 }
 
 // ReadRunManifest reads a run manifest JSON file.
@@ -96,4 +106,35 @@ func ReadRunManifest(path string) (RunManifest, error) {
 		return RunManifest{}, err
 	}
 	return manifest, nil
+}
+
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		return err
+	}
+	cleanup = false
+	return nil
 }

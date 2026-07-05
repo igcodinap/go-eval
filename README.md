@@ -80,6 +80,21 @@ goeval test ./...
 
 Unset `GOEVAL` and evals skip. That keeps CI and local runs safe by default.
 
+For local observability, run through the explicit store mode:
+
+```bash
+goeval test --store ./...
+goeval runs list
+goeval runs show latest
+goeval runs failures latest
+goeval runs report latest
+```
+
+Stored runs live under `.goeval/` by default, with `results.jsonl`,
+`traces.jsonl`, `judge-events.jsonl`, `test-events.jsonl`, `summary.json`,
+`report.html`, and `goeval-run.json` grouped per run. Add `.goeval/` to your
+repo's `.gitignore`.
+
 ## Datasets
 
 Keep golden cases in JSON when you want eval data outside Go test code:

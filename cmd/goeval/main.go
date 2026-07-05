@@ -18,12 +18,13 @@ import (
 	"github.com/igcodinap/go-eval/compare"
 )
 
-var version = "v1.0.0"
+var version = "v1.2.0"
 
 type goCommandFunc func(context.Context, []string, []string, io.Reader, io.Writer, io.Writer) int
 
 const usage = `Usage:
-  goeval test [--profile <name>] [--config <path>] [go test args...]
+  goeval test [--store] [--runs-dir <dir>] [--run-id <id>] [--run-name <name>] [--profile <name>] [--config <path>] [go test args...]
+  goeval runs list|show|summary|failures|trace|compare|report|prune [...]
   goeval eval --metric contains|regex|jsonpath|field-count --dataset <cases.json> [--out <results.jsonl>]
   goeval compare [--policy <path>] [--config <path>] [--case-id-key <key>] [--score-tolerance <float>] [--fail-on-regression=<bool>] [--format text|json] <baseline.jsonl> <current.jsonl>
   goeval summarize [--policy <path>] [--config <path>] [--case-id-key <key>] <results.jsonl>
@@ -34,6 +35,7 @@ const usage = `Usage:
 
 Commands:
   test       Run go test with GOEVAL=1 set.
+  runs       Inspect locally stored goeval test runs.
   eval       Run deterministic post-hoc evals over a dataset (jsonpath uses go-eval's limited dot-path syntax).
   compare    Compare two go-eval JSONL result files.
   summarize  Summarize one go-eval JSONL result file.
@@ -59,6 +61,8 @@ func run(ctx context.Context, args []string, baseEnv []string, stdin io.Reader, 
 		return 0
 	case "test":
 		return runTest(ctx, args[1:], baseEnv, stdin, stdout, stderr, goCmd)
+	case "runs":
+		return runRuns(args[1:], stdout, stderr)
 	case "eval":
 		return runEval(ctx, args[1:], stdout, stderr)
 	case "compare":
@@ -90,47 +94,58 @@ func runTest(
 		goCmd = runGoCommand
 	}
 
-	profileName, configPath, forwardedArgs, err := parseTestArgs(args)
+	parsed, err := parseTestArgs(args)
 	if err != nil {
 		writef(stderr, "test: %v\n", err)
 		return 2
 	}
-	if profileName == "" {
-		if configPath != "" {
+	if !parsed.store && (parsed.runsDir != "" || parsed.runID != "" || parsed.runName != "") {
+		writef(stderr, "test: --runs-dir, --run-id, and --run-name require --store\n")
+		return 2
+	}
+	if parsed.profile == "" {
+		if parsed.configPath != "" {
 			writef(stderr, "test: --config requires --profile\n")
 			return 2
 		}
-		goArgs := append([]string{"test"}, forwardedArgs...)
+		goArgs := append([]string{"test"}, parsed.forwarded...)
 		env := setEnv(baseEnv, eval.EnvVar, "1")
+		if parsed.store {
+			return runGoTestStored(ctx, goArgs, env, stdin, stdout, stderr, goCmd, storedTestRequest{
+				runsDir: parsed.runsDir,
+				runID:   parsed.runID,
+				runName: parsed.runName,
+			})
+		}
 		resultsDir := lookupEnvValue(env, eval.ResultsDirEnvVar)
 		return runGoTestWithManifest(ctx, goArgs, env, stdin, stdout, stderr, goCmd, runManifestRequest{
 			resultsDir: resultsDir,
 		})
 	}
 
-	manifest, _, err := loadManifest(configPath, true)
+	manifest, _, err := loadManifest(parsed.configPath, true)
 	if err != nil {
 		writef(stderr, "test: read config: %v\n", err)
 		return 2
 	}
-	profile, ok := manifest.Profiles[profileName]
+	profile, ok := manifest.Profiles[parsed.profile]
 	if !ok {
-		writef(stderr, "test: profile %q not found\n", profileName)
+		writef(stderr, "test: profile %q not found\n", parsed.profile)
 		return 2
 	}
 
 	missing := checkManifestPrerequisites(ctx, profile.Prerequisites)
 	if len(missing) > 0 {
 		if profile.MissingPrerequisite == "fail" {
-			printMissingPrerequisites(stderr, profileName, "failed", missing)
+			printMissingPrerequisites(stderr, parsed.profile, "failed", missing)
 			return 1
 		}
-		printMissingPrerequisites(stdout, profileName, "skipped", missing)
+		printMissingPrerequisites(stdout, parsed.profile, "skipped", missing)
 		return 0
 	}
 
 	testArgs := append([]string{"test"}, profile.Packages...)
-	testArgs = append(testArgs, forwardedArgs...)
+	testArgs = append(testArgs, parsed.forwarded...)
 	if len(testArgs) == 1 {
 		testArgs = append(testArgs, "./...")
 	}
@@ -146,8 +161,17 @@ func runTest(
 	} else {
 		env = unsetEnv(env, eval.ResultsDirEnvVar)
 	}
+	if parsed.store {
+		return runGoTestStored(ctx, testArgs, env, stdin, stdout, stderr, goCmd, storedTestRequest{
+			profile:  parsed.profile,
+			packages: append([]string(nil), profile.Packages...),
+			runsDir:  parsed.runsDir,
+			runID:    parsed.runID,
+			runName:  parsed.runName,
+		})
+	}
 	return runGoTestWithManifest(ctx, testArgs, env, stdin, stdout, stderr, goCmd, runManifestRequest{
-		profile:    profileName,
+		profile:    parsed.profile,
 		packages:   append([]string(nil), profile.Packages...),
 		resultsDir: profile.ResultsDir,
 	})
@@ -799,34 +823,68 @@ type calibrateCommandArgs struct {
 	format         string
 }
 
-func parseTestArgs(args []string) (string, string, []string, error) {
-	var profile string
-	var config string
-	var forwarded []string
+type testCommandArgs struct {
+	profile    string
+	configPath string
+	store      bool
+	runsDir    string
+	runID      string
+	runName    string
+	forwarded  []string
+}
+
+func parseTestArgs(args []string) (testCommandArgs, error) {
+	var parsed testCommandArgs
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch {
 		case arg == "--profile":
 			i++
 			if i >= len(args) {
-				return "", "", nil, errors.New("--profile requires a value")
+				return parsed, errors.New("--profile requires a value")
 			}
-			profile = args[i]
+			parsed.profile = args[i]
 		case strings.HasPrefix(arg, "--profile="):
-			profile = strings.TrimPrefix(arg, "--profile=")
+			parsed.profile = strings.TrimPrefix(arg, "--profile=")
 		case arg == "--config":
 			i++
 			if i >= len(args) {
-				return "", "", nil, errors.New("--config requires a value")
+				return parsed, errors.New("--config requires a value")
 			}
-			config = args[i]
+			parsed.configPath = args[i]
 		case strings.HasPrefix(arg, "--config="):
-			config = strings.TrimPrefix(arg, "--config=")
+			parsed.configPath = strings.TrimPrefix(arg, "--config=")
+		case arg == "--store":
+			parsed.store = true
+		case arg == "--runs-dir":
+			i++
+			if i >= len(args) {
+				return parsed, errors.New("--runs-dir requires a value")
+			}
+			parsed.runsDir = args[i]
+		case strings.HasPrefix(arg, "--runs-dir="):
+			parsed.runsDir = strings.TrimPrefix(arg, "--runs-dir=")
+		case arg == "--run-id":
+			i++
+			if i >= len(args) {
+				return parsed, errors.New("--run-id requires a value")
+			}
+			parsed.runID = args[i]
+		case strings.HasPrefix(arg, "--run-id="):
+			parsed.runID = strings.TrimPrefix(arg, "--run-id=")
+		case arg == "--run-name":
+			i++
+			if i >= len(args) {
+				return parsed, errors.New("--run-name requires a value")
+			}
+			parsed.runName = args[i]
+		case strings.HasPrefix(arg, "--run-name="):
+			parsed.runName = strings.TrimPrefix(arg, "--run-name=")
 		default:
-			forwarded = append(forwarded, arg)
+			parsed.forwarded = append(parsed.forwarded, arg)
 		}
 	}
-	return profile, config, forwarded, nil
+	return parsed, nil
 }
 
 func parseEvalArgs(args []string) (evalCommandArgs, error) {

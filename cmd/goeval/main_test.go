@@ -11,6 +11,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	eval "github.com/igcodinap/go-eval"
+	"github.com/igcodinap/go-eval/compare"
 )
 
 type recordingGoCommand struct {
@@ -24,6 +27,24 @@ func (r *recordingGoCommand) run(_ context.Context, args []string, env []string,
 	r.calls++
 	r.args = append([]string(nil), args...)
 	r.env = append([]string(nil), env...)
+	return r.code
+}
+
+type writingGoCommand struct {
+	code int
+	args []string
+	env  []string
+	fn   func([]string, io.Writer) error
+}
+
+func (r *writingGoCommand) run(_ context.Context, args []string, env []string, _ io.Reader, stdout io.Writer, _ io.Writer) int {
+	r.args = append([]string(nil), args...)
+	r.env = append([]string(nil), env...)
+	if r.fn != nil {
+		if err := r.fn(env, stdout); err != nil {
+			return 1
+		}
+	}
 	return r.code
 }
 
@@ -126,6 +147,228 @@ func TestRunTestProfileLoadsManifestAndForwardsEnv(t *testing.T) {
 	}
 	if manifest.GoEvalVersion == "" || manifest.Profile != "pr" || manifest.ResultsPath != filepath.Join(resultsDir, "results.jsonl") {
 		t.Fatalf("unexpected manifest: %+v", manifest)
+	}
+}
+
+func TestRunTestStoreCreatesRunAndRendersOutput(t *testing.T) {
+	runsDir := t.TempDir()
+	recorder := &writingGoCommand{
+		code: 0,
+		fn: func(env []string, stdout io.Writer) error {
+			resultsDir, _ := envValue(env, "GOEVAL_RESULTS_DIR")
+			if err := os.WriteFile(filepath.Join(resultsDir, "results.jsonl"), []byte(
+				`{"test_name":"TestEval/pass","metric":"Contains","score":1,"passed":true,"tokens":3,"latency_ns":10}`+"\n",
+			), 0o644); err != nil {
+				return err
+			}
+			_, _ = io.WriteString(stdout, `{"Action":"run","Package":"pkg","Test":"TestEval/pass"}`+"\n")
+			_, _ = io.WriteString(stdout, `{"Action":"output","Package":"pkg","Test":"TestEval/pass","Output":"=== RUN   TestEval/pass\n"}`+"\n")
+			_, _ = io.WriteString(stdout, `{"Action":"pass","Package":"pkg","Test":"TestEval/pass","Elapsed":0.01}`+"\n")
+			return nil
+		},
+	}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(
+		context.Background(),
+		[]string{"test", "--store", "--runs-dir", runsDir, "--run-id", "smoke", "./..."},
+		[]string{"PATH=/bin", "GOEVAL_RESULTS_DIR=old"},
+		nil,
+		&stdout,
+		&stderr,
+		recorder.run,
+	)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr=%q", code, stderr.String())
+	}
+	if !reflect.DeepEqual(recorder.args, []string{"test", "-json", "./..."}) {
+		t.Fatalf("args = %#v, want go test -json ./...", recorder.args)
+	}
+	resultsDir, count := envValue(recorder.env, "GOEVAL_RESULTS_DIR")
+	if count != 1 || resultsDir != filepath.Join(runsDir, "runs", "smoke") {
+		t.Fatalf("GOEVAL_RESULTS_DIR = %q count=%d", resultsDir, count)
+	}
+	if !strings.Contains(stdout.String(), "=== RUN   TestEval/pass") || strings.Contains(stdout.String(), `"Action"`) {
+		t.Fatalf("stdout should be human output, got:\n%s", stdout.String())
+	}
+	runDir := filepath.Join(runsDir, "runs", "smoke")
+	for _, name := range []string{"goeval-run.json", "results.jsonl", "test-events.jsonl", "summary.json", "report.html"} {
+		if _, err := os.Stat(filepath.Join(runDir, name)); err != nil {
+			t.Fatalf("expected %s: %v", name, err)
+		}
+	}
+	events, err := os.ReadFile(filepath.Join(runDir, "test-events.jsonl"))
+	if err != nil {
+		t.Fatalf("ReadFile test events: %v", err)
+	}
+	if !strings.Contains(string(events), `"Action":"output"`) {
+		t.Fatalf("test-events.jsonl missing raw events:\n%s", events)
+	}
+	manifest, err := eval.ReadRunManifest(filepath.Join(runDir, "goeval-run.json"))
+	if err != nil {
+		t.Fatalf("ReadRunManifest: %v", err)
+	}
+	if manifest.RunID != "smoke" || manifest.Status != "passed" || manifest.TestEventsPath == "" || manifest.SummaryPath == "" || manifest.ReportPath == "" {
+		t.Fatalf("unexpected manifest: %+v", manifest)
+	}
+	latest, err := os.ReadFile(filepath.Join(runsDir, "latest"))
+	if err != nil {
+		t.Fatalf("ReadFile latest: %v", err)
+	}
+	if strings.TrimSpace(string(latest)) != "smoke" {
+		t.Fatalf("latest = %q, want smoke", latest)
+	}
+}
+
+func TestRunTestStorePreservesFailureExitAndStatus(t *testing.T) {
+	runsDir := t.TempDir()
+	recorder := &writingGoCommand{
+		code: 1,
+		fn: func(_ []string, stdout io.Writer) error {
+			_, _ = io.WriteString(stdout, `{"Action":"run","Package":"pkg","Test":"TestEval/fail"}`+"\n")
+			_, _ = io.WriteString(stdout, `{"Action":"output","Package":"pkg","Test":"TestEval/fail","Output":"failure details\n"}`+"\n")
+			_, _ = io.WriteString(stdout, `{"Action":"fail","Package":"pkg","Test":"TestEval/fail","Elapsed":0.01}`+"\n")
+			return nil
+		},
+	}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(context.Background(), []string{"test", "--store", "--runs-dir", runsDir, "--run-id", "failed"}, nil, nil, &stdout, &stderr, recorder.run)
+
+	if code != 1 {
+		t.Fatalf("exit code = %d, want go test failure 1; stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "failure details") {
+		t.Fatalf("stdout missing rendered failure output:\n%s", stdout.String())
+	}
+	manifest, err := eval.ReadRunManifest(filepath.Join(runsDir, "runs", "failed", "goeval-run.json"))
+	if err != nil {
+		t.Fatalf("ReadRunManifest: %v", err)
+	}
+	if manifest.Status != "failed" || manifest.ExitCode != 1 {
+		t.Fatalf("manifest status = %q exit=%d, want failed exit 1", manifest.Status, manifest.ExitCode)
+	}
+}
+
+func TestRunTestStoreManifestFailureDoesNotUpdateAliases(t *testing.T) {
+	runsDir := t.TempDir()
+	recorder := &writingGoCommand{
+		code: 1,
+		fn: func(env []string, stdout io.Writer) error {
+			resultsDir, _ := envValue(env, "GOEVAL_RESULTS_DIR")
+			if err := os.Mkdir(filepath.Join(resultsDir, "goeval-run.json"), 0o755); err != nil {
+				return err
+			}
+			_, _ = io.WriteString(stdout, `{"Action":"run","Package":"pkg","Test":"TestEval/fail"}`+"\n")
+			_, _ = io.WriteString(stdout, `{"Action":"fail","Package":"pkg","Test":"TestEval/fail","Elapsed":0.01}`+"\n")
+			return nil
+		},
+	}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(context.Background(), []string{"test", "--store", "--runs-dir", runsDir, "--run-id", "manifest-fail"}, nil, nil, &stdout, &stderr, recorder.run)
+
+	if code != 1 {
+		t.Fatalf("exit code = %d, want original go test failure 1; stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "test: write run manifest:") {
+		t.Fatalf("stderr missing manifest failure:\n%s", stderr.String())
+	}
+	if _, err := os.Stat(filepath.Join(runsDir, "latest")); !os.IsNotExist(err) {
+		t.Fatalf("latest should not be updated after manifest failure, stat err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(runsDir, "index.json")); !os.IsNotExist(err) {
+		t.Fatalf("index should not be updated after manifest failure, stat err=%v", err)
+	}
+}
+
+func TestRunTestWithoutStoreDoesNotCreateRunStore(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.test/plain\n\ngo 1.22\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile go.mod: %v", err)
+	}
+	oldwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("Chdir: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(oldwd); err != nil {
+			t.Fatalf("restore cwd: %v", err)
+		}
+	})
+	recorder := &recordingGoCommand{code: 0}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(context.Background(), []string{"test", "./..."}, nil, nil, &stdout, &stderr, recorder.run)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr=%q", code, stderr.String())
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".goeval")); !os.IsNotExist(err) {
+		t.Fatalf("plain goeval test should not create .goeval, stat err=%v", err)
+	}
+}
+
+func TestRunTestStoreFlagsRequireStore(t *testing.T) {
+	recorder := &recordingGoCommand{code: 0}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(context.Background(), []string{"test", "--run-id", "ignored", "./..."}, nil, nil, &stdout, &stderr, recorder.run)
+
+	if code != 2 {
+		t.Fatalf("exit code = %d, want usage error 2", code)
+	}
+	if recorder.calls != 0 {
+		t.Fatalf("go command should not run when store-only flags are used without --store")
+	}
+	if !strings.Contains(stderr.String(), "require --store") {
+		t.Fatalf("stderr missing store-only flag error:\n%s", stderr.String())
+	}
+}
+
+func TestEnsureGoTestJSONStopsAtArgs(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want []string
+	}{
+		{
+			name: "adds before packages",
+			args: []string{"test", "./...", "-run", "TestEval"},
+			want: []string{"test", "-json", "./...", "-run", "TestEval"},
+		},
+		{
+			name: "preserves go json flag",
+			args: []string{"test", "-json", "./..."},
+			want: []string{"test", "-json", "./..."},
+		},
+		{
+			name: "replaces disabled go json flag",
+			args: []string{"test", "./...", "-json=false"},
+			want: []string{"test", "./...", "-json"},
+		},
+		{
+			name: "ignores test binary json after args",
+			args: []string{"test", "./pkg", "-args", "-json"},
+			want: []string{"test", "-json", "./pkg", "-args", "-json"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ensureGoTestJSON(tt.args)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("ensureGoTestJSON(%#v) = %#v, want %#v", tt.args, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -737,6 +980,185 @@ func TestRunCalibrateJSONAndPairwiseVariants(t *testing.T) {
 	}
 }
 
+func TestRunRunsListSummaryFailuresAndTrace(t *testing.T) {
+	runsDir := t.TempDir()
+	writeStoredRunFixture(t, runsDir, "latest-run", "2026-07-05T12:00:00Z",
+		`{"test_name":"TestEval/fail","metric":"Faithfulness","trace_id":"trace-1","score":0.2,"passed":false,"reason":"missing source","metadata":{"case_id":"case-1","flow":"rag.answer","tier":"critical","dataset":"smoke/v1"}}`+"\n",
+		`{"id":"trace-1","name":"rag","spans":[{"id":"span-1","name":"retrieve","kind":"tool","duration_ns":5}]}`+"\n",
+	)
+	if err := os.WriteFile(filepath.Join(runsDir, "latest"), []byte("latest-run\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile latest: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := run(context.Background(), []string{"runs", "list", "--runs-dir", runsDir, "--json"}, nil, nil, &stdout, &stderr, nil)
+	if code != 0 {
+		t.Fatalf("runs list exit = %d; stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"id": "latest-run"`) || !strings.Contains(stdout.String(), `"failed": 1`) {
+		t.Fatalf("runs list json missing run summary:\n%s", stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"runs", "summary", "latest", "--runs-dir", runsDir}, nil, nil, &stdout, &stderr, nil)
+	if code != 0 {
+		t.Fatalf("runs summary exit = %d; stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "Summary: total=1 passed=0 failed=1") {
+		t.Fatalf("runs summary missing totals:\n%s", stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"runs", "failures", "latest", "--runs-dir", runsDir}, nil, nil, &stdout, &stderr, nil)
+	if code != 0 {
+		t.Fatalf("runs failures exit = %d; stderr=%q", code, stderr.String())
+	}
+	for _, want := range []string{"failure", "case=case-1", "trace_id=trace-1", "flow=rag.answer", "reason=missing source"} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Fatalf("runs failures missing %q in:\n%s", want, stdout.String())
+		}
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"runs", "trace", "latest", "--failed", "--runs-dir", runsDir}, nil, nil, &stdout, &stderr, nil)
+	if code != 0 {
+		t.Fatalf("runs trace exit = %d; stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "trace\tid=trace-1") || !strings.Contains(stdout.String(), "span\tid=span-1") {
+		t.Fatalf("runs trace missing trace tree:\n%s", stdout.String())
+	}
+}
+
+func TestRunRunsComparePreviousLatest(t *testing.T) {
+	runsDir := t.TempDir()
+	writeStoredRunFixture(t, runsDir, "old", "2026-07-05T10:00:00Z",
+		`{"test_name":"TestEval/regress","metric":"Faithfulness","score":0.9,"passed":true}`+"\n",
+		"",
+	)
+	writeStoredRunFixture(t, runsDir, "new", "2026-07-05T11:00:00Z",
+		`{"test_name":"TestEval/regress","metric":"Faithfulness","score":0.3,"passed":false}`+"\n",
+		"",
+	)
+	if err := os.WriteFile(filepath.Join(runsDir, "latest"), []byte("new\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile latest: %v", err)
+	}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(context.Background(), []string{"runs", "compare", "previous", "latest", "--runs-dir", runsDir}, nil, nil, &stdout, &stderr, nil)
+
+	if code != 1 {
+		t.Fatalf("runs compare exit = %d, want regression failure 1; stderr=%q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "regressed\tTestEval/regress\tmetric=Faithfulness") {
+		t.Fatalf("runs compare missing regression:\n%s", stdout.String())
+	}
+}
+
+func TestRunRunsComparePreviousLatestRequiresTwoRuns(t *testing.T) {
+	runsDir := t.TempDir()
+	writeStoredRunFixture(t, runsDir, "only", "2026-07-05T10:00:00Z",
+		`{"test_name":"TestEval/pass","metric":"Contains","score":1,"passed":true}`+"\n",
+		"",
+	)
+	if err := os.WriteFile(filepath.Join(runsDir, "latest"), []byte("only\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile latest: %v", err)
+	}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(context.Background(), []string{"runs", "compare", "previous", "latest", "--runs-dir", runsDir}, nil, nil, &stdout, &stderr, nil)
+
+	if code != 1 {
+		t.Fatalf("runs compare exit = %d, want 1", code)
+	}
+	if !strings.Contains(stderr.String(), "baseline: previous run is not available") {
+		t.Fatalf("stderr missing previous-run error:\n%s", stderr.String())
+	}
+}
+
+func TestRunRunsTraceFailedWithoutResultsReturnsEmptyList(t *testing.T) {
+	runsDir := t.TempDir()
+	runDir := filepath.Join(runsDir, "runs", "trace-only")
+	if err := os.MkdirAll(runDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll run: %v", err)
+	}
+	tracesPath := filepath.Join(runDir, "traces.jsonl")
+	if err := os.WriteFile(tracesPath, []byte(`{"id":"trace-1","name":"rag"}`+"\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile traces: %v", err)
+	}
+	manifest := eval.NewRunManifest()
+	manifest.RunID = "trace-only"
+	manifest.Status = "failed"
+	manifest.TracesPath = tracesPath
+	manifest.ResultsPath = filepath.Join(runDir, "results.jsonl")
+	manifest.StartedAt = "2026-07-05T10:00:00Z"
+	if err := eval.WriteRunManifest(filepath.Join(runDir, "goeval-run.json"), manifest); err != nil {
+		t.Fatalf("WriteRunManifest: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(runsDir, "latest"), []byte("trace-only\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile latest: %v", err)
+	}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(context.Background(), []string{"runs", "trace", "latest", "--failed", "--runs-dir", runsDir, "--json"}, nil, nil, &stdout, &stderr, nil)
+
+	if code != 0 {
+		t.Fatalf("runs trace exit = %d; stderr=%q", code, stderr.String())
+	}
+	if strings.TrimSpace(stdout.String()) != "[]" {
+		t.Fatalf("stdout = %q, want empty JSON list", stdout.String())
+	}
+}
+
+func TestRunRunsReportAndPrune(t *testing.T) {
+	runsDir := t.TempDir()
+	writeStoredRunFixture(t, runsDir, "old", "2026-07-05T10:00:00Z",
+		`{"test_name":"TestEval/old","metric":"Contains","score":1,"passed":true}`+"\n",
+		"",
+	)
+	writeStoredRunFixture(t, runsDir, "new", "2026-07-05T11:00:00Z",
+		`{"test_name":"TestEval/new","metric":"Contains","score":1,"passed":true}`+"\n",
+		"",
+	)
+	if err := os.WriteFile(filepath.Join(runsDir, "latest"), []byte("new\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile latest: %v", err)
+	}
+	outPath := filepath.Join(t.TempDir(), "report.html")
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run(context.Background(), []string{"runs", "report", "latest", "--runs-dir", runsDir, "--out", outPath}, nil, nil, &stdout, &stderr, nil)
+	if code != 0 {
+		t.Fatalf("runs report exit = %d; stderr=%q", code, stderr.String())
+	}
+	data, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("ReadFile report: %v", err)
+	}
+	if !strings.Contains(string(data), "go-eval report") {
+		t.Fatalf("report missing content:\n%s", data)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"runs", "prune", "--keep", "1", "--runs-dir", runsDir}, nil, nil, &stdout, &stderr, nil)
+	if code != 0 {
+		t.Fatalf("runs prune exit = %d; stderr=%q", code, stderr.String())
+	}
+	if _, err := os.Stat(filepath.Join(runsDir, "runs", "old")); !os.IsNotExist(err) {
+		t.Fatalf("old run should be pruned, stat err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(runsDir, "runs", "new")); err != nil {
+		t.Fatalf("new run should remain: %v", err)
+	}
+}
+
 func TestRunVersion(t *testing.T) {
 	oldVersion := version
 	version = "test-version"
@@ -822,6 +1244,60 @@ func writeCompareFiles(t *testing.T, baseline string, current string) (string, s
 		t.Fatalf("WriteFile current: %v", err)
 	}
 	return baselinePath, currentPath
+}
+
+func writeStoredRunFixture(t *testing.T, runsDir string, id string, startedAt string, results string, traces string) {
+	t.Helper()
+
+	runDir := filepath.Join(runsDir, "runs", id)
+	if err := os.MkdirAll(runDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll run: %v", err)
+	}
+	resultsPath := filepath.Join(runDir, "results.jsonl")
+	if err := os.WriteFile(resultsPath, []byte(results), 0o644); err != nil {
+		t.Fatalf("WriteFile results: %v", err)
+	}
+	tracesPath := filepath.Join(runDir, "traces.jsonl")
+	if traces != "" {
+		if err := os.WriteFile(tracesPath, []byte(traces), 0o644); err != nil {
+			t.Fatalf("WriteFile traces: %v", err)
+		}
+	}
+	summary, err := compareSummary(resultsPath)
+	if err != nil {
+		t.Fatalf("summarize fixture: %v", err)
+	}
+	summaryPath := filepath.Join(runDir, "summary.json")
+	summaryData, err := json.MarshalIndent(summary, "", "  ")
+	if err != nil {
+		t.Fatalf("MarshalIndent summary: %v", err)
+	}
+	if err := os.WriteFile(summaryPath, append(summaryData, '\n'), 0o644); err != nil {
+		t.Fatalf("WriteFile summary: %v", err)
+	}
+	reportPath := filepath.Join(runDir, "report.html")
+	if err := os.WriteFile(reportPath, []byte("<html>go-eval report</html>\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile report: %v", err)
+	}
+	manifest := eval.NewRunManifest()
+	manifest.RunID = id
+	manifest.GoEvalVersion = version
+	manifest.Status = "passed"
+	manifest.Command = []string{"go", "test", "-json", "./..."}
+	manifest.ResultsPath = resultsPath
+	manifest.TracesPath = tracesPath
+	manifest.TestEventsPath = filepath.Join(runDir, "test-events.jsonl")
+	manifest.SummaryPath = summaryPath
+	manifest.ReportPath = reportPath
+	manifest.StartedAt = startedAt
+	manifest.EndedAt = startedAt
+	if err := eval.WriteRunManifest(filepath.Join(runDir, "goeval-run.json"), manifest); err != nil {
+		t.Fatalf("WriteRunManifest: %v", err)
+	}
+}
+
+func compareSummary(path string) (compare.ResultsSummary, error) {
+	return compare.SummarizeFile(path)
 }
 
 func envValue(env []string, key string) (string, int) {

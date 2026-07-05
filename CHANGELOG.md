@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Local observability run store through `goeval test --store`, writing stored
+  run bundles under `.goeval/runs/<run-id>/` with `goeval-run.json`,
+  `results.jsonl`, `traces.jsonl`, `judge-events.jsonl`, `test-events.jsonl`,
+  `summary.json`, and `report.html`
+- `goeval runs` explorer commands: `list`, `show`, `summary`, `failures`,
+  `trace`, `compare`, `report`, and `prune`
+- Additive run manifest fields for run ID/name, repo metadata, exit code,
+  status, test events, summary, and report paths
+- Internal local run store with path-safe run IDs, latest/previous alias
+  resolution, stale index fallback, and atomic index/latest writes
+
 ## [v1.1.0] - 2026-07-05
 
 ### Added

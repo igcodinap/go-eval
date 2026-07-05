@@ -88,6 +88,42 @@ Without `GOEVAL=1`, the eval calls skip. With `GOEVAL=1`, `Runner` executes each
 metric and reports low scores with `t.Errorf`. Judge or metric execution errors
 are fatal.
 
+## Store Local Runs
+
+Use `goeval test --store` when you want a local run history and browsable
+artifacts:
+
+```bash
+goeval test --store ./...
+goeval runs list
+goeval runs summary latest
+goeval runs failures latest
+goeval runs trace latest --failed
+goeval runs report latest
+```
+
+Stored mode creates `.goeval/runs/<run-id>/` at the module root by default and
+sets `GOEVAL=1` plus `GOEVAL_RESULTS_DIR` for that run. It also forces
+`go test -json`, writes the raw test event stream to `test-events.jsonl`, and
+prints readable test output by replaying event `Output` fields.
+
+Each run directory can contain:
+
+```text
+goeval-run.json
+results.jsonl
+traces.jsonl
+judge-events.jsonl
+test-events.jsonl
+summary.json
+report.html
+```
+
+Use `--runs-dir <dir>` to store runs somewhere else, `--run-id <id>` for a
+deterministic CI run ID, and `--run-name <name>` for human-readable manifest
+metadata. Custom run IDs must already be normalized with lowercase letters,
+digits, dots, underscores, or dashes. Keep `.goeval/` in `.gitignore`.
+
 ## Use an Ollama Judge
 
 Use the Ollama adapter when you want local LLM-as-judge scoring. Start Ollama
