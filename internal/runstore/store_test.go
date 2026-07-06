@@ -88,6 +88,57 @@ func TestStoreRecordsMergesScanWithValidIndex(t *testing.T) {
 	}
 }
 
+func TestStoreScanAcceptsGeneratedTimestampRunID(t *testing.T) {
+	store := New(t.TempDir())
+	id, err := store.NewRunID(time.Date(2026, 7, 6, 2, 14, 1, 0, time.UTC), "main", "f953ecd123")
+	if err != nil {
+		t.Fatalf("NewRunID: %v", err)
+	}
+	writeManifest(t, store, id, "2026-07-06T02:14:01Z")
+
+	records, err := store.Scan()
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	if len(records) != 1 || records[0].ID != id {
+		t.Fatalf("records = %+v, want generated id %q", records, id)
+	}
+}
+
+func TestStoreScanRejectsUnsafeManifestRunID(t *testing.T) {
+	store := New(t.TempDir())
+	if _, err := store.EnsureRunDir("safe-dir"); err != nil {
+		t.Fatalf("EnsureRunDir: %v", err)
+	}
+	data := []byte(`{"run_id":"../victim","started_at":"2026-07-05T10:00:00Z","status":"failed"}` + "\n")
+	if err := os.WriteFile(store.ManifestPath("safe-dir"), data, 0o644); err != nil {
+		t.Fatalf("WriteFile manifest: %v", err)
+	}
+
+	records, err := store.Scan()
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	if len(records) != 0 {
+		t.Fatalf("records = %+v, want unsafe manifest skipped", records)
+	}
+}
+
+func TestStoreRecordsFiltersUnsafeIndexIDs(t *testing.T) {
+	store := New(t.TempDir())
+	if err := store.WriteIndex([]RunRecord{{ID: "../victim", Path: store.RunDir("../victim")}}); err != nil {
+		t.Fatalf("WriteIndex: %v", err)
+	}
+
+	records, err := store.Records()
+	if err != nil {
+		t.Fatalf("Records: %v", err)
+	}
+	if len(records) != 0 {
+		t.Fatalf("records = %+v, want unsafe index ID filtered", records)
+	}
+}
+
 func TestStoreResolveLatestIgnoresRunWithoutManifest(t *testing.T) {
 	store := New(t.TempDir())
 	writeManifest(t, store, "valid", "2026-07-05T10:00:00Z")

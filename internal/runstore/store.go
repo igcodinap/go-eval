@@ -304,7 +304,11 @@ func (s Store) Scan() ([]RunRecord, error) {
 			continue
 		}
 		if manifest.RunID != "" {
-			id = manifest.RunID
+			manifestID := strings.TrimSpace(manifest.RunID)
+			if !isPathSafeSegment(manifestID) || manifestID != entry.Name() {
+				continue
+			}
+			id = manifestID
 		}
 		records = append(records, RunRecord{
 			ID:         id,
@@ -375,7 +379,7 @@ func mergeIndexFields(scanned []RunRecord, indexed []RunRecord) {
 func filterExisting(s Store, records []RunRecord) []RunRecord {
 	filtered := records[:0]
 	for _, record := range records {
-		if record.ID == "" {
+		if !isPathSafeSegment(record.ID) {
 			continue
 		}
 		if _, err := os.Stat(s.ManifestPath(record.ID)); err == nil {
@@ -386,6 +390,24 @@ func filterExisting(s Store, records []RunRecord) []RunRecord {
 		}
 	}
 	return filtered
+}
+
+func isPathSafeSegment(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" || value == "." || value == ".." {
+		return false
+	}
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		case r == '.' || r == '_' || r == '-':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // Resolve returns a concrete run id for explicit ids and aliases.

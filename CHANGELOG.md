@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [v1.2.0] - 2026-07-06
+
 ### Added
 
 - Local observability run store through `goeval test --store`, writing stored
@@ -19,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   status, test events, summary, and report paths
 - Internal local run store with path-safe run IDs, latest/previous alias
   resolution, stale index fallback, and atomic index/latest writes
+
+### Fixed
+
+- Run store scanning now ignores unsafe or mismatched manifest run IDs so alias
+  resolution and pruning stay constrained to valid run directories
 
 ## [v1.1.0] - 2026-07-05
 

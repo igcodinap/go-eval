@@ -335,6 +335,35 @@ func TestRunTestStoreFlagsRequireStore(t *testing.T) {
 	}
 }
 
+func TestResolveRunsRootReturnsAbsoluteCustomPath(t *testing.T) {
+	dir := t.TempDir()
+	oldwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("Chdir: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(oldwd); err != nil {
+			t.Fatalf("restore cwd: %v", err)
+		}
+	})
+
+	relativePath := filepath.Join("..", filepath.Base(dir), "custom-runs")
+	got, err := resolveRunsRoot(relativePath)
+	if err != nil {
+		t.Fatalf("resolveRunsRoot: %v", err)
+	}
+	want, err := filepath.Abs(relativePath)
+	if err != nil {
+		t.Fatalf("Abs: %v", err)
+	}
+	if got != want {
+		t.Fatalf("runs root = %q, want %q", got, want)
+	}
+}
+
 func TestEnsureGoTestJSONStopsAtArgs(t *testing.T) {
 	tests := []struct {
 		name string
