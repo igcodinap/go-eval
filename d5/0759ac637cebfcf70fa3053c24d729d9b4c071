@@ -1,0 +1,38 @@
+internal/runstore/store_test.go
+  s_ff4cf2e8130a59::t_18828704de307e 91-107
+  s_ff4cf2e8130a59::t_617be3b90ede69 108-141
+cmd/goeval/main_test.go
+  s_ff4cf2e8130a59::t_822d344e5ce230 338-352,355-357,362-366
+  s_ff4cf2e8130a59::t_8a739ad956133d 353-354,358-361
+internal/runstore/store.go
+  s_ff4cf2e8130a59::t_e1d006e4e67874 308,382,395,397-410
+  s_ff4cf2e8130a59::t_0bc4d81d53097e 307,309-311,396
+  s_ff4cf2e8130a59::t_d4a7615bb6ed7d 411-412
+CHANGELOG.md
+  s_ff4cf2e8130a59::t_4172c3496ded4e 10-11,25-28
+  s_991a9504925566::t_288aba8c612190 29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d50759ac637cebfcf70fa3053c24d729d9b4c071",
+  "prompts": {},
+  "sessions": {
+    "s_991a9504925566": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f34f8-2ecc-78c2-abd8-2f55e438db11",
+        "model": "gpt-5.5"
+      },
+      "human_author": "igcodinap <igcodinap@users.noreply.github.com>"
+    },
+    "s_ff4cf2e8130a59": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f3343-2489-7690-847c-5cb96e11a336",
+        "model": "gpt-5.5"
+      },
+      "human_author": "igcodinap <igcodinap@users.noreply.github.com>"
+    }
+  }
+}
